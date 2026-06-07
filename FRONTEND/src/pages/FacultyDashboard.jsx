@@ -406,17 +406,68 @@ const FacultyDashboard = () => {
   };
 
   // Filtered lists
-  const filteredActiveProjects = (data.activeProjects || []).filter(p => {
-    return !projectSearch || p.title.toLowerCase().includes(projectSearch.toLowerCase()) || p.studentId?.name?.toLowerCase().includes(projectSearch.toLowerCase());
-  });
+  const filteredActiveProjects = React.useMemo(() => {
+    return (data.activeProjects || []).filter(p => {
+      return !projectSearch || p.title.toLowerCase().includes(projectSearch.toLowerCase()) || p.studentId?.name?.toLowerCase().includes(projectSearch.toLowerCase());
+    });
+  }, [data.activeProjects, projectSearch]);
 
-  const filteredPendingProposals = (data.pendingProposals || []).filter(p => {
-    return p.title.toLowerCase().includes(projectSearch.toLowerCase()) || p.studentId?.name?.toLowerCase().includes(projectSearch.toLowerCase());
-  });
+  const filteredPendingProposals = React.useMemo(() => {
+    return (data.pendingProposals || []).filter(p => {
+      return p.title.toLowerCase().includes(projectSearch.toLowerCase()) || p.studentId?.name?.toLowerCase().includes(projectSearch.toLowerCase());
+    });
+  }, [data.pendingProposals, projectSearch]);
+
+  const analyticsProgressData = React.useMemo(() => {
+    return data.analytics?.progressData || [];
+  }, [data.analytics?.progressData]);
+
+  const analyticsDeptData = React.useMemo(() => {
+    return data.analytics?.deptData || [];
+  }, [data.analytics?.deptData]);
 
   if (loading) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+    <div className="flex min-h-screen bg-slate-50 font-sans animate-pulse">
+      {/* Sidebar Skeleton */}
+      <div className="hidden md:flex flex-col w-64 bg-white border-r border-gray-100 p-4 space-y-6 shrink-0 h-screen">
+        <div className="h-10 bg-gray-200 rounded-xl w-32"></div>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-gray-200"></div>
+          <div className="h-4 bg-gray-200 rounded w-24"></div>
+        </div>
+        <div className="space-y-3 pt-4">
+          {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="h-9 bg-gray-100 rounded-xl"></div>)}
+        </div>
+      </div>
+      
+      {/* Content Skeleton */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        <header className="bg-white border-b border-gray-100 px-8 py-5 flex justify-between items-center shrink-0">
+          <div className="space-y-1.5">
+            <div className="h-5 bg-gray-200 rounded w-24"></div>
+            <div className="h-3 bg-gray-150 rounded w-16"></div>
+          </div>
+          <div className="flex gap-2">
+            <div className="w-8 h-8 rounded-full bg-gray-200"></div>
+            <div className="w-8 h-8 rounded-full bg-gray-200"></div>
+          </div>
+        </header>
+        
+        <div className="p-8 space-y-6 max-w-7xl mx-auto w-full overflow-y-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-2 h-20">
+                <div className="h-3 bg-gray-100 rounded w-16"></div>
+                <div className="h-6 bg-gray-200 rounded w-8"></div>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-white rounded-3xl p-8 border border-gray-100 shadow-sm h-72"></div>
+            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm h-72"></div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 
@@ -1001,7 +1052,7 @@ const FacultyDashboard = () => {
                     <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm h-80">
                       <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-1.5">Project Progress Distribution</h3>
                       <ResponsiveContainer width="100%" height="90%">
-                        <BarChart data={(data.analytics?.progressData || [])}>
+                        <BarChart data={analyticsProgressData}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} />
                           <XAxis dataKey="name" />
                           <YAxis domain={[0, 100]} />
@@ -1015,11 +1066,11 @@ const FacultyDashboard = () => {
                     <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm h-80 flex flex-col justify-between">
                       <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-2">Department Branch Breakdown</h3>
                       <div className="flex-1 flex justify-center items-center">
-                        {data.analytics?.deptData?.length > 0 ? (
+                        {analyticsDeptData.length > 0 ? (
                           <ResponsiveContainer width="100%" height="80%">
                             <PieChart>
-                              <Pie data={data.analytics.deptData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8" label={{ fontSize: 10 }}>
-                                {data.analytics.deptData.map((entry, index) => (
+                              <Pie data={analyticsDeptData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8" label={{ fontSize: 10 }}>
+                                {analyticsDeptData.map((entry, index) => (
                                   <Cell key={`cell-${index}`} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
                                 ))}
                               </Pie>
@@ -1317,6 +1368,20 @@ const FacultyDashboard = () => {
         );
       })()}
 
+      {/* Floating Action Button for mobile announcements */}
+      <div className="md:hidden fixed bottom-6 right-6 z-40">
+        <button
+          onClick={() => {
+            setActiveTab('announcements');
+            setShowAnnForm(true);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className="w-12 h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all cursor-pointer animate-pulse"
+          title="Create Announcement"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      </div>
     </div>
   );
 };

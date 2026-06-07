@@ -6,7 +6,7 @@ import {
   Bell, Clock, RefreshCw, CheckCircle, XCircle, FileText, Paperclip,
   FolderOpen, Calendar, ChevronRight, TrendingUp, AlertTriangle, Play,
   Volume2, VolumeX, Sparkles, Upload, Info, MessageSquare, Download, Search, Mail, Lock,
-  Menu
+  Menu, LogOut
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../lib/api.js';
@@ -103,6 +103,11 @@ const StudentDashboard = () => {
   const [uploading, setUploading]       = useState(false);
   const [selectedFileType, setSelectedFileType] = useState('document');
   const [showNotifs, setShowNotifs]     = useState(false);
+
+  // Memoized available faculty search
+  const filteredAvailableFaculty = React.useMemo(() => {
+    return availableFaculty.filter(f => f.name.toLowerCase().includes(facultySearch.toLowerCase()));
+  }, [availableFaculty, facultySearch]);
 
   // Team Messaging State
   const [messages, setMessages] = useState([]);
@@ -454,8 +459,47 @@ const StudentDashboard = () => {
   const statusMeta = proposal ? (STATUS_META[proposal.status] || { color: 'slate', label: proposal.status, step: 1 }) : {};
 
   if (loading) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+    <div className="flex min-h-screen bg-slate-50 font-sans animate-pulse">
+      {/* Sidebar Skeleton */}
+      <div className="hidden md:flex flex-col w-64 bg-white border-r border-gray-100 p-4 space-y-6 shrink-0 h-screen">
+        <div className="h-10 bg-gray-200 rounded-xl w-32"></div>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-gray-200"></div>
+          <div className="h-4 bg-gray-200 rounded w-24"></div>
+        </div>
+        <div className="space-y-3 pt-4">
+          {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="h-9 bg-gray-100 rounded-xl"></div>)}
+        </div>
+      </div>
+      
+      {/* Content Skeleton */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        <header className="bg-white border-b border-gray-100 px-8 py-5 flex justify-between items-center shrink-0">
+          <div className="space-y-1.5">
+            <div className="h-5 bg-gray-200 rounded w-24"></div>
+            <div className="h-3 bg-gray-150 rounded w-16"></div>
+          </div>
+          <div className="flex gap-2">
+            <div className="w-8 h-8 rounded-full bg-gray-200"></div>
+            <div className="w-8 h-8 rounded-full bg-gray-200"></div>
+          </div>
+        </header>
+        
+        <div className="p-8 space-y-6 max-w-7xl mx-auto w-full overflow-y-auto">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-2 h-20">
+                <div className="h-3 bg-gray-100 rounded w-16"></div>
+                <div className="h-6 bg-gray-200 rounded w-8"></div>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-white rounded-3xl p-8 border border-gray-100 shadow-sm h-72"></div>
+            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm h-72"></div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 
@@ -473,19 +517,11 @@ const StudentDashboard = () => {
         setIsMobileOpen={setIsMobileOpen}
       />
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto pb-20 md:pb-0">
         <header className="bg-white border-b border-gray-100 shadow-sm px-4 md:px-8 py-4 flex items-center justify-between sticky top-0 z-20">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsMobileOpen(true)}
-              className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl md:hidden transition-colors cursor-pointer"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            <div>
-              <h2 className="text-base md:text-lg font-extrabold text-gray-900 capitalize">{TABS.find(t=>t.id===activeTab)?.label || 'Dashboard'}</h2>
-              <p className="text-[10px] md:text-xs text-gray-400 font-medium">Student Interface</p>
-            </div>
+          <div>
+            <h2 className="text-base md:text-lg font-extrabold text-gray-900 capitalize">{TABS.find(t=>t.id===activeTab)?.label || 'Dashboard'}</h2>
+            <p className="text-[10px] md:text-xs text-gray-400 font-medium">Student Interface</p>
           </div>
           <div className="flex items-center gap-3">
             {/* Sound Toggle */}
@@ -521,6 +557,31 @@ const StudentDashboard = () => {
         </header>
 
         <div className="p-4 md:p-8 max-w-7xl mx-auto">
+          {/* Mobile project tab group sub-navigation */}
+          {proposal && ['details', 'tracker', 'deadlines'].includes(activeTab) && (
+            <div className="md:hidden flex gap-2 overflow-x-auto pb-3 mb-5 border-b border-gray-100 scrollbar-none">
+              {[
+                { id: 'details', label: 'Project Details' },
+                { id: 'tracker', label: 'Progress Tracker' },
+                { id: 'deadlines', label: 'Milestones' }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`px-4 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition cursor-pointer ${
+                    activeTab === tab.id
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} className="w-full">
                        {/* ── 1. DASHBOARD OVERVIEW ── */}
@@ -975,7 +1036,7 @@ const StudentDashboard = () => {
                                </div>
 
                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                 {availableFaculty.filter(f => f.name.toLowerCase().includes(facultySearch.toLowerCase())).map(faculty => (
+                                 {filteredAvailableFaculty.map(faculty => (
                                    <div key={faculty._id} className="p-5 border border-gray-100 rounded-2xl bg-white relative overflow-hidden group shadow-sm hover:shadow-md transition-all">
                                      <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center mb-4">
                                        <span className="text-lg font-extrabold text-blue-700">{faculty.name[0]}</span>
@@ -1494,16 +1555,23 @@ const StudentDashboard = () => {
               <div className="max-w-4xl mx-auto animate-fade-in">
                 <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm">
                   <h3 className="text-sm font-extrabold text-gray-400 uppercase tracking-widest mb-6 border-b border-gray-100 pb-2">My Profile Credentials</h3>
-                  <div className="flex flex-col md:flex-row items-center gap-6 mb-8 bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                    <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-3xl">
+                  <div className="flex flex-col md:flex-row items-center gap-6 mb-8 bg-gray-50 p-6 rounded-2xl border border-gray-100 w-full">
+                    <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-3xl shrink-0">
                       {data.profile?.name?.[0]?.toUpperCase()}
                     </div>
-                    <div className="text-center md:text-left">
-                      <h4 className="text-xl font-extrabold text-gray-900">{data.profile?.name}</h4>
-                      <p className="text-xs text-gray-500 mt-1">{data.profile?.email} • {data.profile?.mobileNumber}</p>
-                      <p className="text-xs text-gray-400 mt-0.5 font-bold uppercase tracking-wider">{data.profile?.course} — {data.profile?.branch} Dept.</p>
+                    <div className="text-center md:text-left flex-1 min-w-0">
+                      <h4 className="text-xl font-extrabold text-gray-900 truncate">{data.profile?.name}</h4>
+                      <p className="text-xs text-gray-500 mt-1 truncate">{data.profile?.email} • {data.profile?.mobileNumber}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 font-bold uppercase tracking-wider truncate">{data.profile?.course} — {data.profile?.branch} Dept.</p>
                       <p className="text-xs text-gray-400">Year {data.profile?.year || 'N/A'} • Sec-{data.profile?.section || 'N/A'}</p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="md:hidden w-full sm:w-auto px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors mt-2 md:mt-0"
+                    >
+                      <LogOut className="w-4 h-4" /> Sign Out
+                    </button>
                   </div>
 
                   <form onSubmit={handleProfileSubmit} className="space-y-6">
@@ -1745,6 +1813,60 @@ const StudentDashboard = () => {
           </div>
         )}
       </AnimatePresence>
+      {/* Floating Action Button for Mobile Chat */}
+      {proposal && activeTab !== 'messages' && (
+        <div className="md:hidden fixed bottom-20 right-6 z-40">
+          <button
+            onClick={() => {
+              setActiveTab('messages');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all cursor-pointer animate-bounce"
+            title="Team Chat"
+          >
+            <MessageSquare className="w-6 h-6" />
+          </button>
+        </div>
+      )}
+
+      {/* Bottom Navigation Bar for Mobile */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-150 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] flex justify-around items-center py-2 px-2 pb-[max(12px,env(safe-area-inset-bottom))]">
+        {[
+          { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+          { id: 'project-group', label: 'Project', icon: Target },
+          { id: 'messages', label: 'Chat', icon: MessageSquare },
+          { id: 'submission', label: 'Submit', icon: Send },
+          { id: 'profile', label: 'Profile', icon: User },
+        ].map((tab) => {
+          let isActive = false;
+          let targetId = tab.id;
+
+          if (tab.id === 'project-group') {
+            const projectTabs = ['details', 'tracker', 'deadlines', 'proposal', 'announcements'];
+            isActive = projectTabs.includes(activeTab);
+            targetId = data.proposal ? 'details' : 'proposal';
+          } else {
+            isActive = activeTab === tab.id;
+          }
+
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(targetId);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all cursor-pointer ${
+                isActive ? 'text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              <Icon className="w-5 h-5" />
+              <span className="text-[10px] font-medium tracking-wide">{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 };

@@ -58,7 +58,6 @@ const HodDashboard = () => {
   });
   
   const [projects, setProjects]               = useState([]);
-  const [students, setStudents]               = useState([]);
   const [facultyWorkload, setFacultyWorkload] = useState([]);
   const [approvedFacultyList, setApprovedFacultyList] = useState([]);
   const [deadlines, setDeadlines]             = useState([]);
@@ -74,7 +73,6 @@ const HodDashboard = () => {
   const [selectedFaculty, setSelectedFaculty] = useState('');
   const [facSearch, setFacSearch]             = useState('');
   const [projectFilter, setProjectFilter]     = useState('all');
-  const [searchQuery, setSearchQuery]         = useState('');
   const [deadlineForm, setDeadlineForm]       = useState({ title: '', description: '', dueDate: '', targetRoles: ['all'] });
   const [addForm, setAddForm]                 = useState({ name: '', email: '', password: '', mobileNumber: '', department: '', designation: '', employeeId: '', course: '', year: '', branch: '', section: '' });
   
@@ -127,12 +125,6 @@ const HodDashboard = () => {
     } catch {}
   }, [projectFilter]);
 
-  const fetchStudents = useCallback(async () => {
-    try { 
-      const r = await api.get(`/hod/students${searchQuery ? `?search=${searchQuery}` : ''}`); 
-      setStudents(r.data); 
-    } catch {}
-  }, [searchQuery]);
 
   const fetchFacultyWorkload = useCallback(async () => {
     try { 
@@ -165,7 +157,7 @@ const HodDashboard = () => {
     if (activeTab === 'announcements') {
       api.get('/announcements').then(r => setAnnouncements(r.data.announcements || [])).catch(() => {});
     }
-  }, [activeTab, fetchProjects, fetchStudents, fetchFacultyWorkload, fetchDeadlines]);
+  }, [activeTab, fetchProjects, fetchFacultyWorkload, fetchDeadlines]);
 
   // Polling messages in HOD detailed modal
   const fetchModalMessages = useCallback(async (projectId) => {
@@ -450,25 +442,98 @@ const HodDashboard = () => {
     toast.success(`${type.replace('_', ' ').toUpperCase()} report exported successfully!`);
   };
 
-  const branchCounts = {};
-  (projects || []).forEach(p => {
-    const b = p.studentId?.branch || p.department || 'General';
-    branchCounts[b] = (branchCounts[b] || 0) + 1;
-  });
-  const branchData = Object.keys(branchCounts).map(name => ({
-    name,
-    value: branchCounts[name]
-  }));
+  const branchData = React.useMemo(() => {
+    const branchCounts = {};
+    (projects || []).forEach(p => {
+      const b = p.studentId?.branch || p.department || 'General';
+      branchCounts[b] = (branchCounts[b] || 0) + 1;
+    });
+    return Object.keys(branchCounts).map(name => ({
+      name,
+      value: branchCounts[name]
+    }));
+  }, [projects]);
 
-  const domainCounts = {};
-  (projects || []).forEach(p => {
-    const d = p.domain || 'General';
-    domainCounts[d] = (domainCounts[d] || 0) + 1;
-  });
-  const domainData = Object.keys(domainCounts).map(name => ({
-    name,
-    value: domainCounts[name]
-  }));
+  const domainData = React.useMemo(() => {
+    const domainCounts = {};
+    (projects || []).forEach(p => {
+      const d = p.domain || 'General';
+      domainCounts[d] = (domainCounts[d] || 0) + 1;
+    });
+    return Object.keys(domainCounts).map(name => ({
+      name,
+      value: domainCounts[name]
+    }));
+  }, [projects]);
+
+  const facultyWorkloadShortChartData = React.useMemo(() => {
+    return facultyWorkload.map(f => ({
+      name: f.name.split(' ')[0],
+      Assigned: f.studentCount,
+      Capacity: f.capacity || 60
+    }));
+  }, [facultyWorkload]);
+
+  const facultyWorkloadFullChartData = React.useMemo(() => {
+    return facultyWorkload.map(f => ({
+      name: f.name.split(' ').slice(0, 2).join(' '),
+      Assigned: f.studentCount,
+      Capacity: f.capacity || 60
+    }));
+  }, [facultyWorkload]);
+
+  const filteredApprovedFacultyList = React.useMemo(() => {
+    return approvedFacultyList.filter(f => f.name.toLowerCase().includes(facSearch.toLowerCase()));
+  }, [approvedFacultyList, facSearch]);
+
+  const pendingSubmissions = React.useMemo(() => {
+    return projects.filter(p => p.status === 'Submitted' && p.finalSubmission?.status === 'Under HOD Review');
+  }, [projects]);
+
+  if (loading) return (
+    <div className="flex min-h-screen bg-slate-50 font-sans animate-pulse">
+      {/* Sidebar Skeleton */}
+      <div className="hidden md:flex flex-col w-64 bg-white border-r border-gray-100 p-4 space-y-6 shrink-0 h-screen">
+        <div className="h-10 bg-gray-200 rounded-xl w-32"></div>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-gray-200"></div>
+          <div className="h-4 bg-gray-200 rounded w-24"></div>
+        </div>
+        <div className="space-y-3 pt-4">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className="h-9 bg-gray-100 rounded-xl"></div>)}
+        </div>
+      </div>
+      
+      {/* Content Skeleton */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        <header className="bg-white border-b border-gray-100 px-8 py-5 flex justify-between items-center shrink-0">
+          <div className="space-y-1.5">
+            <div className="h-5 bg-gray-200 rounded w-24"></div>
+            <div className="h-3 bg-gray-200 rounded w-16"></div>
+          </div>
+          <div className="flex gap-2">
+            <div className="w-8 h-8 rounded-full bg-gray-200"></div>
+            <div className="w-8 h-8 rounded-full bg-gray-200"></div>
+          </div>
+        </header>
+        
+        <div className="p-8 space-y-6 max-w-7xl mx-auto w-full overflow-y-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-2 h-20">
+                <div className="h-3 bg-gray-100 rounded w-16"></div>
+                <div className="h-6 bg-gray-200 rounded w-8"></div>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-white rounded-3xl p-8 border border-gray-100 shadow-sm h-72"></div>
+            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm h-72"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex min-h-screen bg-slate-50 font-sans">
@@ -547,7 +612,7 @@ const HodDashboard = () => {
                     ) : (
                       <div className="h-64 w-full mt-4">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={facultyWorkload.map(f => ({ name: f.name.split(' ')[0], Assigned: f.studentCount, Capacity: f.capacity || 60 }))} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <BarChart data={facultyWorkloadShortChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                             <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6B7280' }} />
                             <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} domain={[0, 60]} />
@@ -754,7 +819,7 @@ const HodDashboard = () => {
                   <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
                     <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-1.5"><FileText className="w-4 h-4 text-purple-500" /> Final Deliverables Evaluative Reviews</h3>
                     <div className="divide-y divide-gray-100">
-                      {projects.filter(p => p.status === 'Submitted' && p.finalSubmission?.status === 'Under HOD Review').map(p => (
+                      {pendingSubmissions.map(p => (
                         <div key={p._id} className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row justify-between gap-4">
                           <div className="flex-1">
                             <h4 className="text-xs font-bold text-gray-900">{p.title}</h4>
@@ -1018,7 +1083,7 @@ const HodDashboard = () => {
                     ) : (
                       <div className="h-72 w-full mt-4">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={facultyWorkload.map(f => ({ name: f.name.split(' ').slice(0, 2).join(' '), Assigned: f.studentCount, Capacity: f.capacity || 60 }))} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
+                          <BarChart data={facultyWorkloadFullChartData} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                             <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6B7280', fontWeight: 'bold' }} />
                             <YAxis tick={{ fontSize: 10, fill: '#6B7280', fontWeight: 'bold' }} domain={[0, 60]} />
@@ -1054,7 +1119,7 @@ const HodDashboard = () => {
                   <input type="text" placeholder="Search guides by name..." className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-9 pr-3 text-xs focus:outline-none" value={facSearch} onChange={e => setFacSearch(e.target.value)} />
                 </div>
                 <div className="max-h-48 overflow-y-auto space-y-2">
-                  {approvedFacultyList.filter(f => f.name.toLowerCase().includes(facSearch.toLowerCase())).map(f => (
+                  {filteredApprovedFacultyList.map(f => (
                     <div 
                       key={f._id} 
                       onClick={() => setSelectedFaculty(f._id)}
@@ -1391,6 +1456,21 @@ const HodDashboard = () => {
           </div>
         );
       })()}
+
+      {/* Floating Action Button for mobile */}
+      <div className="md:hidden fixed bottom-6 right-6 z-40">
+        <button
+          onClick={() => {
+            setActiveTab('faculty');
+            setActiveModal({ type: 'addFaculty', id: null });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className="w-12 h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all cursor-pointer animate-pulse"
+          title="Add Faculty"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      </div>
 
     </div>
   );

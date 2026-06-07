@@ -15,6 +15,7 @@ import {
   PieChart, Pie, Cell, Legend,
 } from 'recharts';
 import Sidebar from '../Components/Sidebar';
+import useDebounce from '../hooks/useDebounce';
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
 const ADMIN_NAV = (newReqs = 0) => [
@@ -71,6 +72,10 @@ export default function AdminDashboard() {
   const [facultySearch, setFacultySearch] = useState('');
   const [projectStatus, setProjectStatus] = useState('all');
 
+  // Debounced search terms
+  const debouncedStudentSearch = useDebounce(studentSearch, 400);
+  const debouncedFacultySearch = useDebounce(facultySearch, 400);
+
   // Expanded rows
   const [expandedStudents, setExpandedStudents] = useState({});
   const [expandedFaculty, setExpandedFaculty]   = useState({});
@@ -108,23 +113,23 @@ export default function AdminDashboard() {
     setSectionLoading(true);
     try {
       const params = new URLSearchParams();
-      if (studentSearch) params.set('search', studentSearch);
+      if (debouncedStudentSearch) params.set('search', debouncedStudentSearch);
       if (studentBranch) params.set('branch', studentBranch);
       if (studentYear)   params.set('year', studentYear);
       const r = await api.get(`/admin/students?${params}`);
       setStudents(r.data.students || []);
     } catch {} finally { setSectionLoading(false); }
-  }, [studentSearch, studentBranch, studentYear]);
+  }, [debouncedStudentSearch, studentBranch, studentYear]);
 
   const fetchFaculty = useCallback(async () => {
     setSectionLoading(true);
     try {
       const params = new URLSearchParams();
-      if (facultySearch) params.set('search', facultySearch);
+      if (debouncedFacultySearch) params.set('search', debouncedFacultySearch);
       const r = await api.get(`/admin/faculty?${params}`);
       setFaculty(r.data.faculty || []);
     } catch {} finally { setSectionLoading(false); }
-  }, [facultySearch]);
+  }, [debouncedFacultySearch]);
 
   const fetchProjects = useCallback(async () => {
     setSectionLoading(true);
@@ -154,8 +159,8 @@ export default function AdminDashboard() {
   useEffect(() => { if (activeTab === 'announcements') fetchAnnouncements();}, [activeTab, fetchAnnouncements]);
 
   // Re-fetch when filters change
-  useEffect(() => { if (activeTab === 'students') fetchStudents(); }, [studentSearch, studentBranch, studentYear]);
-  useEffect(() => { if (activeTab === 'faculty')  fetchFaculty();  }, [facultySearch]);
+  useEffect(() => { if (activeTab === 'students') fetchStudents(); }, [debouncedStudentSearch, studentBranch, studentYear]);
+  useEffect(() => { if (activeTab === 'faculty')  fetchFaculty();  }, [debouncedFacultySearch]);
   useEffect(() => { if (activeTab === 'projects') fetchProjects(); }, [projectStatus]);
 
   // ── Actions ──────────────────────────────────────────────────────────────────
@@ -210,10 +215,46 @@ export default function AdminDashboard() {
 
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (loading) return (
-    <div style={{ background: '#040a14' }} className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-12 h-12 border-4 border-slate-700 border-t-rose-500 rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-slate-400 text-sm">Loading Admin Panel…</p>
+    <div style={{ background: '#040a14' }} className="flex min-h-screen font-sans text-slate-300 animate-pulse">
+      {/* Sidebar Skeleton */}
+      <div className="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800 p-4 space-y-6 shrink-0 h-screen">
+        <div className="h-10 bg-slate-800/80 rounded-xl w-32"></div>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-slate-800"></div>
+          <div className="h-4 bg-slate-800 rounded w-24"></div>
+        </div>
+        <div className="space-y-3 pt-4">
+          {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="h-9 bg-slate-800/40 rounded-xl"></div>)}
+        </div>
+      </div>
+      
+      {/* Content Skeleton */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        <header className="bg-slate-900 border-b border-slate-800 px-8 py-5 flex justify-between items-center shrink-0">
+          <div className="space-y-1.5">
+            <div className="h-5 bg-slate-800 rounded w-24"></div>
+            <div className="h-3 bg-slate-805 rounded w-16"></div>
+          </div>
+          <div className="flex gap-2">
+            <div className="w-8 h-8 rounded-full bg-slate-800"></div>
+            <div className="w-8 h-8 rounded-full bg-slate-800"></div>
+          </div>
+        </header>
+        
+        <div className="p-8 space-y-6 max-w-screen-2xl mx-auto w-full overflow-y-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+              <div key={i} className="bg-slate-800/40 p-5 rounded-2xl border border-slate-800/50 shadow-sm space-y-2 h-24">
+                <div className="h-3 bg-slate-700/50 rounded w-16"></div>
+                <div className="h-6 bg-slate-700 rounded w-8"></div>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            <div className="lg:col-span-2 bg-slate-800/40 rounded-3xl p-8 border border-slate-800/50 shadow-sm h-72"></div>
+            <div className="lg:col-span-3 bg-slate-800/40 rounded-3xl p-6 border border-slate-800/50 shadow-sm h-72"></div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -221,28 +262,34 @@ export default function AdminDashboard() {
   const navItems = ADMIN_NAV(stats?.newRequests || 0);
 
   // ── Chart data ───────────────────────────────────────────────────────────────
-  const statusPieData = stats ? [
-    { name: 'Pending HOD',      value: stats.pendingHOD      || 0 },
-    { name: 'HOD Approved',     value: stats.hodApproved     || 0 },
-    { name: 'Faculty Assigned', value: stats.facultyAssigned || 0 },
-    { name: 'Active',           value: stats.active          || 0 },
-    { name: 'Submitted',        value: stats.submitted       || 0 },
-    { name: 'Rejected (HOD)',   value: stats.rejectedHOD     || 0 },
-    { name: 'Rej. Faculty',     value: stats.rejectedFaculty || 0 },
-  ].filter(d => d.value > 0) : [];
+  const statusPieData = React.useMemo(() => {
+    return stats ? [
+      { name: 'Pending HOD',      value: stats.pendingHOD      || 0 },
+      { name: 'HOD Approved',     value: stats.hodApproved     || 0 },
+      { name: 'Faculty Assigned', value: stats.facultyAssigned || 0 },
+      { name: 'Active',           value: stats.active          || 0 },
+      { name: 'Submitted',        value: stats.submitted       || 0 },
+      { name: 'Rejected (HOD)',   value: stats.rejectedHOD     || 0 },
+      { name: 'Rej. Faculty',     value: stats.rejectedFaculty || 0 },
+    ].filter(d => d.value > 0) : [];
+  }, [stats]);
 
-  const branchBarData = stats?.branchStats?.map(b => ({ branch: b._id || 'N/A', count: b.count })) || [];
+  const branchBarData = React.useMemo(() => {
+    return stats?.branchStats?.map(b => ({ branch: b._id || 'N/A', count: b.count })) || [];
+  }, [stats]);
 
-  const overviewCards = stats ? [
-    { label: 'Total Students',    value: stats.totalStudents,    color: 'cyan',   icon: Users },
-    { label: 'Total Faculty',     value: stats.totalFaculty,     color: 'indigo', icon: UserCheck },
-    { label: 'Total Projects',    value: stats.totalProposals,   color: 'purple', icon: FolderOpen },
-    { label: 'Active Projects',   value: stats.active,           color: 'green',  icon: TrendingUp },
-    { label: 'Submitted',         value: stats.submitted,        color: 'teal',   icon: CheckCircle },
-    { label: 'Pending Review',    value: stats.pendingHOD,       color: 'yellow', icon: Clock },
-    { label: 'New (7 days)',       value: stats.newRequests,      color: 'orange', icon: Bell },
-    { label: 'Files Stored',      value: stats.totalFiles,       color: 'rose',   icon: FileText },
-  ] : [];
+  const overviewCards = React.useMemo(() => {
+    return stats ? [
+      { label: 'Total Students',    value: stats.totalStudents,    color: 'cyan',   icon: Users },
+      { label: 'Total Faculty',     value: stats.totalFaculty,     color: 'indigo', icon: UserCheck },
+      { label: 'Total Projects',    value: stats.totalProposals,   color: 'purple', icon: FolderOpen },
+      { label: 'Active Projects',   value: stats.active,           color: 'green',  icon: TrendingUp },
+      { label: 'Submitted',         value: stats.submitted,        color: 'teal',   icon: CheckCircle },
+      { label: 'Pending Review',    value: stats.pendingHOD,       color: 'yellow', icon: Clock },
+      { label: 'New (7 days)',       value: stats.newRequests,      color: 'orange', icon: Bell },
+      { label: 'Files Stored',      value: stats.totalFiles,       color: 'rose',   icon: FileText },
+    ] : [];
+  }, [stats]);
 
   const ACCENT = {
     cyan:   'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',

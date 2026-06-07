@@ -53,7 +53,7 @@ const Sidebar = ({ navItems, user, role, onLogout, unreadCount = 0, activeTab, o
           width: collapsed ? 72 : 260
         }}
         transition={{ duration: 0.25, ease: 'easeInOut' }}
-        className="h-screen bg-white border-r border-gray-100 shadow-sm flex flex-col fixed md:sticky top-0 left-0 shrink-0 overflow-hidden z-50 md:z-30"
+        className="h-[100dvh] bg-white border-r border-gray-100 shadow-sm flex flex-col fixed md:sticky inset-y-0 left-0 shrink-0 overflow-hidden z-50 md:z-30"
       >
         {/* Logo / Brand */}
         <div className={`p-4 flex items-center gap-3 border-b border-gray-100 bg-gradient-to-br ${c.gradient}`}>
