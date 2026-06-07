@@ -424,7 +424,8 @@ export const exportProjectsExcel = async (req, res) => {
 
 export const updateProjectSubmission = async (req, res) => {
   try {
-    const { status, rejectionReason, requiredCorrections } = req.body;
+    const { status, rejectionReason, reason, requiredCorrections } = req.body;
+    const rejectReason = rejectionReason || reason;
     const proposal = await ProjectProposal.findById(req.params.id)
       .populate('studentId', 'name email')
       .populate('assignedFaculty', 'name email');
@@ -458,7 +459,7 @@ export const updateProjectSubmission = async (req, res) => {
       console.log(`\x1b[32m[SUCCESS]\x1b[0m HOD approved final submission for ${proposal.title}, forwarded to Faculty.`);
       return res.status(200).json({ message: 'Submission approved by HOD and forwarded to Faculty review.', proposal });
     } else if (status === 'Rejected') {
-      if (!rejectionReason || rejectionReason.trim().length < 20) {
+      if (!rejectReason || rejectReason.trim().length < 20) {
         return res.status(400).json({ message: 'Rejection reason must be at least 20 characters.' });
       }
       if (!requiredCorrections || requiredCorrections.trim().length < 20) {
@@ -474,26 +475,26 @@ export const updateProjectSubmission = async (req, res) => {
         version: proposal.submissionHistory.length + 1,
         reviewerName: req.user.name,
         reviewerRole: 'HOD',
-        rejectionReason: rejectionReason.trim(),
+        rejectionReason: rejectReason.trim(),
         requiredCorrections: requiredCorrections.trim(),
         reviewedAt: new Date()
       });
 
       proposal.finalSubmission.status = 'Rejected';
-      proposal.finalSubmission.rejectionReason = rejectionReason.trim();
+      proposal.finalSubmission.rejectionReason = rejectReason.trim();
       proposal.status = 'Faculty Accepted'; // Reopens upload section
       await proposal.save();
 
       await Notification.create({
         userId: proposal.studentId._id,
         userModel: 'Student',
-        message: `Your final submission was rejected by HOD. Reason: ${rejectionReason.trim().substring(0, 60)}...`,
+        message: `Your final submission was rejected by HOD. Reason: ${rejectReason.trim().substring(0, 60)}...`,
         type: 'rejection'
       });
 
       // Send rejection email to student
       const subject = `❌ Project Final Submission Rejected by HOD — "${proposal.title}"`;
-      const html = emailTemplates.proposalRejected(proposal.studentId.name, proposal.title, `${rejectionReason.trim()}<br/><strong>Required Corrections:</strong> ${requiredCorrections.trim()}`);
+      const html = emailTemplates.proposalRejected(proposal.studentId.name, proposal.title, `${rejectReason.trim()}<br/><strong>Required Corrections:</strong> ${requiredCorrections.trim()}`);
       sendEmail(proposal.studentId.email, subject, html);
 
       console.log(`\x1b[31m[INFO]\x1b[0m Final submission rejected by HOD for ${proposal.title}`);

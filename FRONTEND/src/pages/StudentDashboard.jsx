@@ -802,7 +802,7 @@ const StudentDashboard = () => {
                           <div className="flex items-center gap-3">
                             <label className="text-sm font-bold text-gray-700">Non-Leader Team Size:</label>
                             <select className="bg-gray-100 border-none rounded-lg px-3 py-1.5 text-sm font-bold focus:ring-2 focus:ring-blue-500" value={proposalForm.teamSize} onChange={handleTeamSizeChange}>
-                              {[0,1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
+                               {[1,2,3].map(n => <option key={n} value={n}>{n}</option>)}
                             </select>
                           </div>
                         </div>

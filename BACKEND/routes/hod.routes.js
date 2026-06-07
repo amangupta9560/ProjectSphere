@@ -26,7 +26,7 @@ router.put('/proposals/:id/reject', rejectProposal);
 router.put('/proposals/:id/assign', assignFacultyToProposal);
 router.get('/projects', getAllProjects);
 router.get('/projects/export', exportProjectsExcel);
-router.put('/projects/:id/submission', updateProjectSubmission);
+router.put('/proposals/:id/submission', updateProjectSubmission);
 
 // Student management
 router.get('/students', getAllStudents);
