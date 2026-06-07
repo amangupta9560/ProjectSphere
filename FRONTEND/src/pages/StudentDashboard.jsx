@@ -5,7 +5,8 @@ import {
   LayoutDashboard, BookOpen, Users, Target, Send, Megaphone, User,
   Bell, Clock, RefreshCw, CheckCircle, XCircle, FileText, Paperclip,
   FolderOpen, Calendar, ChevronRight, TrendingUp, AlertTriangle, Play,
-  Volume2, VolumeX, Sparkles, Upload, Info, MessageSquare, Download, Search, Mail, Lock
+  Volume2, VolumeX, Sparkles, Upload, Info, MessageSquare, Download, Search, Mail, Lock,
+  Menu
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../lib/api.js';
@@ -69,6 +70,7 @@ const StudentDashboard = () => {
   const [activeTab, setActiveTab]       = useState('overview');
   const [data, setData]                 = useState({ profile: null, proposal: null, submissions: [], deadlines: [], notifications: [], unreadCount: 0 });
   const [loading, setLoading]           = useState(true);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [files, setFiles]               = useState([]);
   
   // Extension & Rescheduling State
@@ -467,13 +469,23 @@ const StudentDashboard = () => {
         unreadCount={data.unreadCount}
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        isMobileOpen={isMobileOpen}
+        setIsMobileOpen={setIsMobileOpen}
       />
 
       <div className="flex-1 overflow-auto">
-        <header className="bg-white border-b border-gray-100 shadow-sm px-8 py-4 flex items-center justify-between sticky top-0 z-20">
-          <div>
-            <h2 className="text-lg font-extrabold text-gray-900 capitalize">{TABS.find(t=>t.id===activeTab)?.label || 'Dashboard'}</h2>
-            <p className="text-xs text-gray-400 font-medium">Student Interface</p>
+        <header className="bg-white border-b border-gray-100 shadow-sm px-4 md:px-8 py-4 flex items-center justify-between sticky top-0 z-20">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileOpen(true)}
+              className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl md:hidden transition-colors cursor-pointer"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div>
+              <h2 className="text-base md:text-lg font-extrabold text-gray-900 capitalize">{TABS.find(t=>t.id===activeTab)?.label || 'Dashboard'}</h2>
+              <p className="text-[10px] md:text-xs text-gray-400 font-medium">Student Interface</p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             {/* Sound Toggle */}
@@ -508,7 +520,7 @@ const StudentDashboard = () => {
           </div>
         </header>
 
-        <div className="p-8 max-w-7xl mx-auto">
+        <div className="p-4 md:p-8 max-w-7xl mx-auto">
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} className="w-full">
                        {/* ── 1. DASHBOARD OVERVIEW ── */}
@@ -542,7 +554,7 @@ const StudentDashboard = () => {
                   )}
 
                   {/* Stats Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                     {[
                       { label: 'Applied', val: proposal ? 1 : 0, color: 'blue' },
                       { label: 'Approved', val: ['HOD Approved', 'Pending Faculty Assignment', 'Faculty Assigned', 'Faculty Accepted', 'Submitted'].includes(proposal?.status) ? 1 : 0, color: 'green' },
@@ -764,7 +776,7 @@ const StudentDashboard = () => {
                         
                         <div>
                           <label className="text-sm font-bold text-gray-700 mb-1.5 block">Project Type <span className="text-red-400">*</span></label>
-                          <div className="flex gap-4">
+                          <div className="flex flex-col sm:flex-row gap-4">
                             <label className="flex items-center gap-2 cursor-pointer font-medium text-sm text-gray-700 bg-gray-50 border border-gray-200 p-3.5 rounded-xl hover:bg-gray-100 transition-all flex-1">
                               <input type="radio" name="projectType" value="Application" checked={proposalForm.projectType === 'Application'} onChange={e => setProposalForm({ ...proposalForm, projectType: e.target.value })} className="text-blue-600 focus:ring-blue-500 w-4 h-4" />
                               <span>Application Development</span>

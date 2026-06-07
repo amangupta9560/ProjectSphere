@@ -6,7 +6,7 @@ import {
   Settings, Search, Trash2, PowerOff, ChevronDown, ChevronUp,
   Eye, EyeOff, ExternalLink, Pin, PinOff, Plus, X, Shield,
   AlertCircle, CheckCircle, Clock, TrendingUp, FileText,
-  Download, RefreshCw, Bell, BarChart3,
+  Download, RefreshCw, Bell, BarChart3, Menu
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../lib/api.js';
@@ -54,6 +54,7 @@ const fadeIn = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function AdminDashboard() {
   const [activeTab, setActiveTab]         = useState('overview');
+  const [isMobileOpen, setIsMobileOpen]   = useState(false);
   const [stats, setStats]                 = useState(null);
   const [students, setStudents]           = useState([]);
   const [faculty, setFaculty]             = useState([]);
@@ -264,15 +265,25 @@ export default function AdminDashboard() {
         onLogout={handleLogout}
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        isMobileOpen={isMobileOpen}
+        setIsMobileOpen={setIsMobileOpen}
       />
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto min-h-screen">
         {/* Top bar */}
-        <header className="sticky top-0 z-20 bg-slate-900/80 backdrop-blur-md border-b border-slate-700/50 px-8 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold text-white capitalize">{activeTab.replace(/([A-Z])/g, ' $1')}</h1>
-            <p className="text-xs text-slate-500">ProjectSphere Admin Control Center</p>
+        <header className="sticky top-0 z-20 bg-slate-900/80 backdrop-blur-md border-b border-slate-700/50 px-4 md:px-8 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileOpen(true)}
+              className="p-2 -ml-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl md:hidden transition-colors cursor-pointer"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-base md:text-lg font-bold text-white capitalize">{activeTab.replace(/([A-Z])/g, ' $1')}</h1>
+              <p className="text-[10px] md:text-xs text-slate-500">ProjectSphere Admin Control Center</p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={() => { fetchStats(); fetchAnnouncements(); toast.success('Refreshed'); }}
@@ -285,7 +296,7 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-        <div className="p-6 md:p-8 max-w-screen-2xl mx-auto">
+        <div className="p-4 md:p-8 max-w-screen-2xl mx-auto">
           <AnimatePresence mode="wait">
 
             {/* ═══════════════════════════ OVERVIEW ═══════════════════════════ */}

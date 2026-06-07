@@ -8,7 +8,7 @@ import {
   Megaphone, Pin, Plus, X, Trash2, Users, Search,
   Filter, ChevronDown, ChevronUp, ExternalLink, User, BarChart2,
   AlertTriangle, BookOpen, UserCheck, TrendingUp, HelpCircle,
-  Check
+  Check, Menu
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../lib/api.js';
@@ -46,6 +46,7 @@ const DONUT_COLORS = ['#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#e
 
 const HodDashboard = () => {
   const [activeTab, setActiveTab]             = useState('overview');
+  const [isMobileOpen, setIsMobileOpen]       = useState(false);
   const [data, setData]                       = useState({
     profile: null,
     stats: { totalStudents: 0, totalFaculty: 0, totalProposals: 0, approvedProposals: 0 },
@@ -478,15 +479,25 @@ const HodDashboard = () => {
         onLogout={handleLogout}
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        isMobileOpen={isMobileOpen}
+        setIsMobileOpen={setIsMobileOpen}
       />
 
       <div className="flex-1 overflow-auto flex flex-col h-screen">
-        <header className="bg-white border-b border-gray-100 shadow-sm px-8 py-4 flex items-center justify-between sticky top-0 z-20 shrink-0">
-          <div>
-            <h2 className="text-lg font-extrabold text-gray-900 capitalize">
-              {HOD_NAV().find(t => t.id === activeTab)?.label || 'HOD Panel'}
-            </h2>
-            <p className="text-xs text-gray-400 font-medium">Department Head Dashboard</p>
+        <header className="bg-white border-b border-gray-100 shadow-sm px-4 md:px-8 py-4 flex items-center justify-between sticky top-0 z-20 shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileOpen(true)}
+              className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl md:hidden transition-colors cursor-pointer"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div>
+              <h2 className="text-base md:text-lg font-extrabold text-gray-900 capitalize">
+                {HOD_NAV().find(t => t.id === activeTab)?.label || 'HOD Panel'}
+              </h2>
+              <p className="text-[10px] md:text-xs text-gray-400 font-medium">Department Head Dashboard</p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <HeaderNotificationBell 
@@ -501,7 +512,7 @@ const HodDashboard = () => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 max-w-7xl mx-auto w-full">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 max-w-7xl mx-auto w-full">
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} className="w-full">
 
@@ -509,7 +520,7 @@ const HodDashboard = () => {
               {activeTab === 'overview' && (
                 <div className="space-y-6">
                   {/* Stats Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                       <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Department Students</p>
                       <p className="text-3xl font-extrabold mt-1 text-purple-600">{data.stats?.totalStudents || 0}</p>
