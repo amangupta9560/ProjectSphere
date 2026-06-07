@@ -601,7 +601,34 @@ const FacultyDashboard = () => {
                         <div key={p._id} className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row justify-between gap-4">
                           <div className="flex-1">
                             <h4 className="text-sm font-bold text-gray-900">{p.title}</h4>
-                            <p className="text-xs text-gray-500 mt-1">Leader: {p.studentId?.name} • Link: <a href={p.finalSubmission.githubLink} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">GitHub Repository</a></p>
+                            <p className="text-xs text-gray-500 mt-1 font-semibold">Leader: {p.studentId?.name}</p>
+                            <div className="text-xs text-gray-500 mt-2 space-y-1">
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                                <span><strong>GitHub:</strong> <a href={p.finalSubmission.githubLink} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">{p.finalSubmission.githubLink}</a></span>
+                                {p.finalSubmission.liveLink && <span><strong>Live Link:</strong> <a href={p.finalSubmission.liveLink} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">{p.finalSubmission.liveLink}</a></span>}
+                                {p.finalSubmission.linkedinLink && <span><strong>LinkedIn:</strong> <a href={p.finalSubmission.linkedinLink} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">{p.finalSubmission.linkedinLink}</a></span>}
+                              </div>
+                              {/* Uploaded Files */}
+                              {data.projectFiles?.[p._id] && data.projectFiles[p._id].length > 0 && (
+                                <div className="mt-2.5 border-t border-gray-100 pt-2">
+                                  <p className="font-bold text-gray-700 mb-1">Uploaded Deliverables:</p>
+                                  <div className="flex flex-wrap gap-2 mt-1.5">
+                                    {data.projectFiles[p._id].map(file => (
+                                      <a
+                                        key={file._id}
+                                        href={file.cloudinaryUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 border border-slate-200 text-slate-700 hover:text-indigo-600 rounded-lg text-xs font-semibold transition cursor-pointer"
+                                      >
+                                        <FileText className="w-3.5 h-3.5" />
+                                        <span className="capitalize">[{file.fileType}]</span> {file.fileName}
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <button onClick={() => approveFinalSubmission(p._id)} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition cursor-pointer">Approve</button>
@@ -650,6 +677,13 @@ const FacultyDashboard = () => {
                               <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md uppercase border border-indigo-100">{p.domain || 'General'}</span>
                               <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${hb.color}`}>Health: {hb.text}</span>
                             </div>
+                            {p.finalSubmission?.status === 'Accepted' && (
+                              <div className="mb-3">
+                                <span className="inline-flex items-center gap-1.5 text-[10px] font-black bg-emerald-500 text-white px-2.5 py-1 rounded-xl border border-emerald-600 shadow-sm uppercase tracking-wider animate-pulse">
+                                  ✓ Project Approved & Submitted
+                                </span>
+                              </div>
+                            )}
                             <h4 className="font-extrabold text-gray-900 leading-snug line-clamp-2 mb-2">{p.title}</h4>
                             <p className="text-xs text-gray-500 mb-4">Leader: {p.studentId?.name} • Members: {p.teamMembers?.length || 0}</p>
                             
@@ -798,16 +832,22 @@ const FacultyDashboard = () => {
                               
                               {isPending && (
                                 <div className="space-y-2">
-                                  <input 
-                                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none" 
-                                    placeholder="Supervisor feedback remarks..." 
-                                    value={extensionRemarks[req._id] || ''} 
-                                    onChange={e => setExtensionRemarks({ ...extensionRemarks, [req._id]: e.target.value })} 
-                                  />
-                                  <div className="flex gap-2">
-                                    <button onClick={() => handleExtensionResolve(req._id, 'Approved')} disabled={extensionResolving[req._id]} className="flex-1 py-1.5 bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold rounded-xl transition cursor-pointer">Accept</button>
-                                    <button onClick={() => handleExtensionResolve(req._id, 'Rejected')} disabled={extensionResolving[req._id]} className="flex-1 py-1.5 bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold rounded-xl transition cursor-pointer">Deny</button>
-                                  </div>
+                                  {req.projectId?.finalSubmission?.status === 'Accepted' ? (
+                                    <span className="text-[10px] text-gray-400 font-bold italic">Actions locked (Project Approved)</span>
+                                  ) : (
+                                    <>
+                                      <input 
+                                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none" 
+                                        placeholder="Supervisor feedback remarks..." 
+                                        value={extensionRemarks[req._id] || ''} 
+                                        onChange={e => setExtensionRemarks({ ...extensionRemarks, [req._id]: e.target.value })} 
+                                      />
+                                      <div className="flex gap-2">
+                                        <button onClick={() => handleExtensionResolve(req._id, 'Approved')} disabled={extensionResolving[req._id]} className="flex-1 py-1.5 bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold rounded-xl transition cursor-pointer">Accept</button>
+                                        <button onClick={() => handleExtensionResolve(req._id, 'Rejected')} disabled={extensionResolving[req._id]} className="flex-1 py-1.5 bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold rounded-xl transition cursor-pointer">Deny</button>
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1032,7 +1072,7 @@ const FacultyDashboard = () => {
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Target Projects</label>
                 <div className="max-h-40 overflow-y-auto space-y-2 border border-gray-100 rounded-xl p-3 bg-gray-50">
-                  {data.activeProjects.map(p => (
+                  {data.activeProjects.filter(p => p.finalSubmission?.status !== 'Accepted').map(p => (
                     <label key={p._id} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 text-xs font-bold">
                       <input type="checkbox" className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
                         checked={deadlineModal.targetProjects.includes(p._id)}
@@ -1054,6 +1094,7 @@ const FacultyDashboard = () => {
         const project = student.project;
         const projectFilesArr = data.projectFiles?.[project._id] || [];
         const isSubmitted = project.status === 'Submitted';
+        const isProjectApproved = project.finalSubmission?.status === 'Accepted';
         const health = calculateHealthScore(project);
         const hb = getHealthBadge(health);
         
@@ -1117,14 +1158,15 @@ const FacultyDashboard = () => {
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Private Notes (Supervisor/HOD)</p>
                     <textarea 
                       rows={4}
-                      className="w-full bg-white border border-gray-200 rounded-xl p-3 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none font-medium text-gray-700"
-                      placeholder="Add private remarks about this team..."
+                      className="w-full bg-white border border-gray-200 rounded-xl p-3 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none font-medium text-gray-700 disabled:opacity-50"
+                      placeholder={isProjectApproved ? "Private notes are locked (Project Completed)" : "Add private remarks about this team..."}
                       value={privateNoteText}
                       onChange={e => setPrivateNoteText(e.target.value)}
+                      disabled={isProjectApproved}
                     />
                     <button
                       onClick={() => handleSavePrivateNotes(project._id)}
-                      disabled={savingPrivateNote}
+                      disabled={savingPrivateNote || isProjectApproved}
                       className="mt-2 w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer"
                     >
                       {savingPrivateNote ? 'Saving...' : 'Save Private Notes'}
@@ -1166,6 +1208,8 @@ const FacultyDashboard = () => {
                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Supervisor Comment</p>
                                 {item.facultyComment ? (
                                   <p className="text-xs text-indigo-700 bg-indigo-50 p-2.5 rounded-xl border border-indigo-100 font-semibold">"{item.facultyComment}"</p>
+                                ) : isProjectApproved ? (
+                                  <span className="text-[10px] text-gray-400 italic">Comments locked (Project Completed)</span>
                                 ) : (
                                   <div className="flex gap-2">
                                     <input 

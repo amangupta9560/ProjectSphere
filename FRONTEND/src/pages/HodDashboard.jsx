@@ -160,6 +160,7 @@ const HodDashboard = () => {
     if (activeTab === 'faculty') { fetchFacultyWorkload(); }
     if (activeTab === 'submissions') fetchProjects();
     if (activeTab === 'deadlines') fetchDeadlines();
+    if (activeTab === 'analytics') { fetchProjects(); fetchFacultyWorkload(); }
     if (activeTab === 'announcements') {
       api.get('/announcements').then(r => setAnnouncements(r.data.announcements || [])).catch(() => {});
     }
@@ -369,6 +370,105 @@ const HodDashboard = () => {
     toast.success('HOD CSV Report exported!');
   };
 
+  const handleCSVExportByType = (type) => {
+    let filtered = [];
+    let filename = '';
+    if (type === 'approved') {
+      filtered = projects.filter(p => p.finalSubmission?.status === 'Accepted');
+      filename = 'Approved_And_Submitted_Projects.csv';
+    } else if (type === 'rejected') {
+      filtered = projects.filter(p => p.finalSubmission?.status === 'Rejected');
+      filename = 'Rejected_Projects.csv';
+    } else if (type === 'not_uploaded') {
+      filtered = projects.filter(p => !p.finalSubmission || p.finalSubmission.status === 'Not Submitted');
+      filename = 'Pending_Deliverable_Projects.csv';
+    }
+    
+    if (filtered.length === 0) {
+      return toast.error(`No projects found for status: ${type.replace('_', ' ')}`);
+    }
+
+    const headers = [
+      'Project Title',
+      'Domain',
+      'Leader Name',
+      'Leader Branch',
+      'Leader Section',
+      'Member 1 Name',
+      'Member 1 Branch',
+      'Member 1 Section',
+      'Member 2 Name',
+      'Member 2 Branch',
+      'Member 2 Section',
+      'Member 3 Name',
+      'Member 3 Branch',
+      'Member 3 Section',
+      'Rejection Reason if any'
+    ];
+
+    const rows = filtered.map(p => {
+      const leaderName = p.studentId?.name || '';
+      const leaderBranch = p.studentId?.branch || p.department || '';
+      const leaderSection = p.studentId?.section || '';
+      
+      const m1 = p.teamMembers?.[0] || {};
+      const m2 = p.teamMembers?.[1] || {};
+      const m3 = p.teamMembers?.[2] || {};
+      
+      const rejectionReason = p.finalSubmission?.rejectionReason || '';
+      
+      return [
+        `"${p.title.replace(/"/g, '""')}"`,
+        `"${(p.domain || '').replace(/"/g, '""')}"`,
+        `"${leaderName.replace(/"/g, '""')}"`,
+        `"${leaderBranch.replace(/"/g, '""')}"`,
+        `"${leaderSection.replace(/"/g, '""')}"`,
+        `"${(m1.name || '').replace(/"/g, '""')}"`,
+        `"${(m1.branch || '').replace(/"/g, '""')}"`,
+        `"${(m1.section || '').replace(/"/g, '""')}"`,
+        `"${(m2.name || '').replace(/"/g, '""')}"`,
+        `"${(m2.branch || '').replace(/"/g, '""')}"`,
+        `"${(m2.section || '').replace(/"/g, '""')}"`,
+        `"${(m3.name || '').replace(/"/g, '""')}"`,
+        `"${(m3.branch || '').replace(/"/g, '""')}"`,
+        `"${(m3.section || '').replace(/"/g, '""')}"`,
+        `"${rejectionReason.replace(/"/g, '""')}"`
+      ];
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`${type.replace('_', ' ').toUpperCase()} report exported successfully!`);
+  };
+
+  const branchCounts = {};
+  (projects || []).forEach(p => {
+    const b = p.studentId?.branch || p.department || 'General';
+    branchCounts[b] = (branchCounts[b] || 0) + 1;
+  });
+  const branchData = Object.keys(branchCounts).map(name => ({
+    name,
+    value: branchCounts[name]
+  }));
+
+  const domainCounts = {};
+  (projects || []).forEach(p => {
+    const d = p.domain || 'General';
+    domainCounts[d] = (domainCounts[d] || 0) + 1;
+  });
+  const domainData = Object.keys(domainCounts).map(name => ({
+    name,
+    value: domainCounts[name]
+  }));
+
   return (
     <div className="flex min-h-screen bg-slate-50 font-sans">
       <Sidebar
@@ -483,6 +583,13 @@ const HodDashboard = () => {
                               <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md uppercase border border-indigo-100">{p.domain || 'General'}</span>
                               <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${hb.color}`}>Health: {hb.text}</span>
                             </div>
+                            {p.finalSubmission?.status === 'Accepted' && (
+                              <div className="mb-3">
+                                <span className="inline-flex items-center gap-1.5 text-[10px] font-black bg-emerald-500 text-white px-2.5 py-1 rounded-xl border border-emerald-600 shadow-sm uppercase tracking-wider animate-pulse">
+                                  ✓ Project Approved & Submitted
+                                </span>
+                              </div>
+                            )}
                             <h4 className="font-extrabold text-gray-900 leading-snug line-clamp-2 mb-2">{p.title}</h4>
                             <p className="text-xs text-gray-500 mb-4">Leader: {p.studentId?.name} • Supervisor: {p.assignedFaculty?.name || 'Unassigned'}</p>
                             
@@ -640,10 +747,34 @@ const HodDashboard = () => {
                         <div key={p._id} className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row justify-between gap-4">
                           <div className="flex-1">
                             <h4 className="text-xs font-bold text-gray-900">{p.title}</h4>
-                            <p className="text-[10px] text-gray-500 mt-1">Leader: {p.studentId?.name} • Links: 
-                              {p.finalSubmission?.liveLink && <a href={p.finalSubmission.liveLink} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline ml-1">Live Demo</a>}
-                              {p.finalSubmission?.githubLink && <a href={p.finalSubmission.githubLink} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline ml-2">GitHub</a>}
-                            </p>
+                            <p className="text-[10px] text-gray-500 mt-1 font-semibold">Leader: {p.studentId?.name}</p>
+                            <div className="text-[10px] text-gray-500 mt-2 space-y-1">
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                                <span><strong>GitHub:</strong> <a href={p.finalSubmission?.githubLink} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">{p.finalSubmission?.githubLink}</a></span>
+                                {p.finalSubmission?.liveLink && <span><strong>Live Link:</strong> <a href={p.finalSubmission?.liveLink} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">{p.finalSubmission?.liveLink}</a></span>}
+                                {p.finalSubmission?.linkedinLink && <span><strong>LinkedIn:</strong> <a href={p.finalSubmission?.linkedinLink} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">{p.finalSubmission?.linkedinLink}</a></span>}
+                              </div>
+                              {/* Uploaded Files */}
+                              {p.uploadedFiles && p.uploadedFiles.length > 0 && (
+                                <div className="mt-2 border-t border-gray-100 pt-2">
+                                  <p className="font-bold text-gray-700 mb-1">Uploaded Deliverables:</p>
+                                  <div className="flex flex-wrap gap-2 mt-1.5">
+                                    {p.uploadedFiles.map(file => (
+                                      <a
+                                        key={file._id}
+                                        href={file.cloudinaryUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 border border-slate-200 text-slate-700 hover:text-indigo-600 rounded-lg text-[10px] font-semibold transition cursor-pointer"
+                                      >
+                                        <FileText className="w-3 h-3" />
+                                        <span className="capitalize">[{file.fileType}]</span> {file.fileName}
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <button onClick={() => evaluateFinalSubmission(p._id, 'Under Faculty Review')} className="px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-xl text-xs font-bold transition cursor-pointer">Route to Supervisor</button>
@@ -755,6 +886,137 @@ const HodDashboard = () => {
                     ))}
                     {hodNotifications.length === 0 && (
                       <p className="text-xs text-gray-400 italic text-center py-8">No notifications logged.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Tab: Reports & Analytics ── */}
+              {activeTab === 'analytics' && (
+                <div className="space-y-6">
+                  {/* CSV Export Panel */}
+                  <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                    <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-1.5"><Download className="w-4 h-4 text-indigo-500" /> Export Project Reports</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {/* Approved Projects Download Card */}
+                      <div className="bg-emerald-50/20 rounded-2xl p-5 border border-emerald-100/50 flex flex-col justify-between">
+                        <div>
+                          <span className="p-2.5 bg-emerald-50 rounded-xl text-emerald-600 inline-block mb-3"><CheckCircle className="w-5 h-5" /></span>
+                          <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">Approved Projects</h4>
+                          <p className="text-[11px] text-gray-500 mt-1 font-medium">Download list of all projects officially submitted and approved by Faculty/HOD.</p>
+                        </div>
+                        <button onClick={() => handleCSVExportByType('approved')} className="mt-4 w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm">
+                          <Download className="w-3.5 h-3.5" /> Approved CSV
+                        </button>
+                      </div>
+
+                      {/* Rejected Projects Download Card */}
+                      <div className="bg-red-50/20 rounded-2xl p-5 border border-red-100/50 flex flex-col justify-between">
+                        <div>
+                          <span className="p-2.5 bg-red-50 rounded-xl text-red-600 inline-block mb-3"><XCircle className="w-5 h-5" /></span>
+                          <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">Rejected Projects</h4>
+                          <p className="text-[11px] text-gray-500 mt-1 font-medium">Download list of final submissions that have been rejected and require revision.</p>
+                        </div>
+                        <button onClick={() => handleCSVExportByType('rejected')} className="mt-4 w-full py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm">
+                          <Download className="w-3.5 h-3.5" /> Rejected CSV
+                        </button>
+                      </div>
+
+                      {/* Pending Deliverables Download Card */}
+                      <div className="bg-amber-50/20 rounded-2xl p-5 border border-amber-100/50 flex flex-col justify-between">
+                        <div>
+                          <span className="p-2.5 bg-amber-50 rounded-xl text-amber-600 inline-block mb-3"><Clock className="w-5 h-5" /></span>
+                          <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">Pending Submission</h4>
+                          <p className="text-[11px] text-gray-500 mt-1 font-medium">Download list of ongoing groups that have not yet uploaded or submitted final work.</p>
+                        </div>
+                        <button onClick={() => handleCSVExportByType('not_uploaded')} className="mt-4 w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm">
+                          <Download className="w-3.5 h-3.5" /> Pending CSV
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Charts Row 1: PieCharts */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Branch distribution */}
+                    <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col">
+                      <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><TrendingUp className="w-4 h-4 text-indigo-500" /> Branch Wise Distribution</h3>
+                      {branchData.length === 0 ? (
+                        <p className="text-xs text-gray-400 italic py-12 text-center flex-1 flex items-center justify-center">No branch data available.</p>
+                      ) : (
+                        <div className="h-64 w-full mt-2 relative">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={branchData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={4}
+                                dataKey="value"
+                              >
+                                {branchData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <RechartsTooltip formatter={(value) => [`${value} Projects`, 'Count']} />
+                              <Legend formatter={(value) => <span className="text-[10px] text-gray-600 font-bold uppercase">{value}</span>} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Domain distribution */}
+                    <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col">
+                      <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><FolderOpen className="w-4 h-4 text-cyan-500" /> Project Domains</h3>
+                      {domainData.length === 0 ? (
+                        <p className="text-xs text-gray-400 italic py-12 text-center flex-1 flex items-center justify-center">No domain data available.</p>
+                      ) : (
+                        <div className="h-64 w-full mt-2 relative">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={domainData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={4}
+                                dataKey="value"
+                              >
+                                {domainData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <RechartsTooltip formatter={(value) => [`${value} Projects`, 'Count']} />
+                              <Legend formatter={(value) => <span className="text-[10px] text-gray-600 font-bold uppercase">{value}</span>} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Charts Row 2: BarChart */}
+                  <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col">
+                    <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><BarChart2 className="w-4 h-4 text-purple-500" /> Faculty Supervision Load vs Max Capacity</h3>
+                    {facultyWorkload.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic py-12 text-center flex-1 flex items-center justify-center">No workload data available.</p>
+                    ) : (
+                      <div className="h-72 w-full mt-4">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={facultyWorkload.map(f => ({ name: f.name.split(' ').slice(0, 2).join(' '), Assigned: f.studentCount, Capacity: f.capacity || 60 }))} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6B7280', fontWeight: 'bold' }} />
+                            <YAxis tick={{ fontSize: 10, fill: '#6B7280', fontWeight: 'bold' }} domain={[0, 60]} />
+                            <RechartsTooltip />
+                            <Bar dataKey="Assigned" fill="#4f46e5" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                            <Bar dataKey="Capacity" fill="#c7d2fe" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -930,7 +1192,8 @@ const HodDashboard = () => {
       {/* ── HOD DETAILED PROJECT MODAL ── */}
       {selectedProject && (() => {
         const project = selectedProject;
-        const projectFilesArr = data.projectFiles?.[project._id] || [];
+        const projectFilesArr = project.uploadedFiles || [];
+        const isProjectApproved = project.finalSubmission?.status === 'Accepted';
         const health = calculateHealthScore(project);
         const hb = getHealthBadge(health);
         
@@ -994,14 +1257,15 @@ const HodDashboard = () => {
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Private Notes (Supervisor/HOD)</p>
                     <textarea 
                       rows={4}
-                      className="w-full bg-white border border-gray-200 rounded-xl p-3 text-xs focus:outline-none resize-none font-medium text-gray-700"
-                      placeholder="Add private remarks..."
+                      className="w-full bg-white border border-gray-200 rounded-xl p-3 text-xs focus:outline-none resize-none font-medium text-gray-700 disabled:opacity-50"
+                      placeholder={isProjectApproved ? "Private notes are locked (Project Completed)" : "Add private remarks..."}
                       value={privateNoteText}
                       onChange={e => setPrivateNoteText(e.target.value)}
+                      disabled={isProjectApproved}
                     />
                     <button
                       onClick={() => handleSavePrivateNotes(project._id)}
-                      disabled={savingPrivateNote}
+                      disabled={savingPrivateNote || isProjectApproved}
                       className="mt-2 w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer"
                     >
                       {savingPrivateNote ? 'Saving...' : 'Save Private Notes'}

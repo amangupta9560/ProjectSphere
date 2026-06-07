@@ -204,6 +204,7 @@ const StudentDashboard = () => {
 
   // Smart Reminder Popup Trigger
   useEffect(() => {
+    if (isApproved) return;
     if (data.deadlines && data.deadlines.length > 0) {
       const now = new Date();
       // Find the closest active deadline in the future or due today
@@ -447,6 +448,7 @@ const StudentDashboard = () => {
   };
 
   const proposal = data.proposal;
+  const isApproved = proposal?.finalSubmission?.status === 'Accepted';
   const statusMeta = proposal ? (STATUS_META[proposal.status] || { color: 'slate', label: proposal.status, step: 1 }) : {};
 
   if (loading) return (
@@ -1021,26 +1023,30 @@ const StudentDashboard = () => {
                         <h3 className="text-sm font-extrabold text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                           <Sparkles className="w-4 h-4 text-amber-500" /> Log Progress Milestone
                         </h3>
-                        <form onSubmit={handleTimelineSubmit} className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="md:col-span-1">
-                              <label className="text-xs font-bold text-gray-500 uppercase mb-1.5 block">Progress Status *</label>
-                              <select className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={timelineStatus} onChange={e => setTimelineStatus(e.target.value)}>
-                                <option value="PROJECT STARTED">PROJECT STARTED (20%)</option>
-                                <option value="PROTOTYPE CREATED">PROTOTYPE CREATED (50%)</option>
-                                <option value="REPORT PREPARED">REPORT PREPARED (80%)</option>
-                                <option value="PROJECT COMPLETE">PROJECT COMPLETE (100%)</option>
-                              </select>
+                        {isApproved ? (
+                          <p className="text-xs text-green-700 bg-green-50 border border-green-200 p-4 rounded-2xl font-bold flex items-center gap-2">✓ Project report has been approved. Milestone logs are closed.</p>
+                        ) : (
+                          <form onSubmit={handleTimelineSubmit} className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="md:col-span-1">
+                                <label className="text-xs font-bold text-gray-500 uppercase mb-1.5 block">Progress Status *</label>
+                                <select className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={timelineStatus} onChange={e => setTimelineStatus(e.target.value)}>
+                                  <option value="PROJECT STARTED">PROJECT STARTED (20%)</option>
+                                  <option value="PROTOTYPE CREATED">PROTOTYPE CREATED (50%)</option>
+                                  <option value="REPORT PREPARED">REPORT PREPARED (80%)</option>
+                                  <option value="PROJECT COMPLETE">PROJECT COMPLETE (100%)</option>
+                                </select>
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="text-xs font-bold text-gray-500 uppercase mb-1.5 block">Milestone Description / Remarks *</label>
+                                <input required type="text" placeholder="Detail the features built or deliverables prepared..." className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={timelineRemarks} onChange={e => setTimelineRemarks(e.target.value)} />
+                              </div>
                             </div>
-                            <div className="md:col-span-2">
-                              <label className="text-xs font-bold text-gray-500 uppercase mb-1.5 block">Milestone Description / Remarks *</label>
-                              <input required type="text" placeholder="Detail the features built or deliverables prepared..." className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={timelineRemarks} onChange={e => setTimelineRemarks(e.target.value)} />
-                            </div>
-                          </div>
-                          <button type="submit" disabled={timelineSubmitting} className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-2">
-                            {timelineSubmitting ? 'Posting...' : <><Sparkles className="w-3.5 h-3.5" /> Post Progress Update</>}
-                          </button>
-                        </form>
+                            <button type="submit" disabled={timelineSubmitting} className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-2">
+                              {timelineSubmitting ? 'Posting...' : <><Sparkles className="w-3.5 h-3.5" /> Post Progress Update</>}
+                            </button>
+                          </form>
+                        )}
                       </div>
                     )}
 
@@ -1151,7 +1157,11 @@ const StudentDashboard = () => {
                       {/* 1. Upload Deliverable form */}
                       <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
                         <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Upload className="w-4 h-4 text-blue-500" /> Upload Deliverable File</h3>
-                        {['Rejected (HOD)', 'Rejected (Faculty)'].includes(proposal.status) ? (
+                        {isApproved ? (
+                          <div className="p-4 bg-green-50 border border-green-200 rounded-2xl text-xs text-green-700 font-bold leading-relaxed flex items-center gap-2">
+                             ✓ Project has been approved and completed. Uploads are closed.
+                          </div>
+                        ) : ['Rejected (HOD)', 'Rejected (Faculty)'].includes(proposal.status) ? (
                           <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-700 font-medium leading-relaxed">
                              ❌ Cannot upload files. Your project proposal is currently rejected.
                           </div>
@@ -1178,7 +1188,7 @@ const StudentDashboard = () => {
                       </div>
 
                       {/* 2. Final Submission Form (URLs) */}
-                      {proposal.status !== 'Submitted' ? (
+                      {proposal.status !== 'Submitted' && !isApproved ? (
                         <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
                           <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Send className="w-4 h-4 text-green-500" /> Submit Project Links</h3>
                           <form onSubmit={handleFinalSubmit} className="space-y-4">
@@ -1434,15 +1444,21 @@ const StudentDashboard = () => {
                               </td>
                               <td className="py-4 px-4 text-right">
                                 <div className="flex gap-2 justify-end">
-                                  {proposal && (
-                                    <button onClick={() => setExtensionModal({ open: true, deadline: d })} className="text-[10px] font-bold text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 py-1.5 px-2.5 rounded-lg border border-purple-100 transition-all">
-                                      Request Extension
-                                    </button>
-                                  )}
-                                  {complianceStatus !== 'Submitted' && complianceStatus !== 'Late Submission' && (
-                                    <button onClick={handleMarkSubmitted} className="text-[10px] font-bold text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 py-1.5 px-2.5 rounded-lg border border-green-100 transition-all">
-                                      Mark Submitted
-                                    </button>
+                                  {isApproved ? (
+                                    <span className="text-[10px] font-bold text-green-600 bg-green-50 border border-green-100 py-1.5 px-2.5 rounded-lg">✓ Project Completed</span>
+                                  ) : (
+                                    <>
+                                      {proposal && (
+                                        <button onClick={() => setExtensionModal({ open: true, deadline: d })} className="text-[10px] font-bold text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 py-1.5 px-2.5 rounded-lg border border-purple-100 transition-all">
+                                          Request Extension
+                                        </button>
+                                      )}
+                                      {complianceStatus !== 'Submitted' && complianceStatus !== 'Late Submission' && (
+                                        <button onClick={handleMarkSubmitted} className="text-[10px] font-bold text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 py-1.5 px-2.5 rounded-lg border border-green-100 transition-all">
+                                          Mark Submitted
+                                        </button>
+                                      )}
+                                    </>
                                   )}
                                 </div>
                               </td>

@@ -190,6 +190,9 @@ export const rejectFinalSubmission = async (req, res) => {
     const proposal = await ProjectProposal.findOne({ _id: req.params.id, assignedFaculty: req.user._id })
       .populate('studentId', 'name email');
     if (!proposal) return res.status(404).json({ message: 'Project not found or not assigned to you.' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
     if (proposal.status !== 'Submitted') {
       return res.status(400).json({ message: 'Project is not in Submitted state.' });
     }
@@ -239,6 +242,9 @@ export const approveFinalSubmission = async (req, res) => {
     const proposal = await ProjectProposal.findOne({ _id: req.params.id, assignedFaculty: req.user._id })
       .populate('studentId', 'name email');
     if (!proposal) return res.status(404).json({ message: 'Project not found or not assigned to you.' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
     if (proposal.status !== 'Submitted') {
       return res.status(400).json({ message: 'Project is not in Submitted state.' });
     }
@@ -268,17 +274,17 @@ export const approveFinalSubmission = async (req, res) => {
   }
 };
 
-// ── addFeedback ───────────────────────────────────────────────────────────────
 export const addFeedback = async (req, res) => {
   try {
     const { message } = req.body;
     if (!message || message.trim().length < 5) return res.status(400).json({ message: 'Feedback message must be at least 5 characters' });
-    const proposal = await ProjectProposal.findOneAndUpdate(
-      { _id: req.params.id, assignedFaculty: req.user._id },
-      { $push: { facultyFeedback: { message: message.trim(), addedBy: req.user._id, addedAt: new Date() } } },
-      { new: true }
-    );
+    const proposal = await ProjectProposal.findOne({ _id: req.params.id, assignedFaculty: req.user._id });
     if (!proposal) return res.status(404).json({ message: 'Proposal not found or you are not the assigned faculty' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
+    proposal.facultyFeedback.push({ message: message.trim(), addedBy: req.user._id, addedAt: new Date() });
+    await proposal.save();
     await Notification.create({ userId: proposal.studentId, userModel: 'Student', message: `New feedback from your supervisor on "${proposal.title}": "${message.substring(0, 60)}..."`, type: 'feedback' });
     console.log(`\x1b[32m[SUCCESS]\x1b[0m Feedback added to: "${proposal.title}"`);
     res.status(200).json({ message: 'Feedback added', proposal });
@@ -316,6 +322,10 @@ export const assignDeadline = async (req, res) => {
     if (validProjects.length !== targetProjects.length) {
       return res.status(403).json({ message: 'You can only assign deadlines to projects you supervise.' });
     }
+    const approvedProjects = validProjects.filter(p => p.finalSubmission?.status === 'Accepted');
+    if (approvedProjects.length > 0) {
+      return res.status(400).json({ message: `Cannot assign deadlines to approved/completed projects: "${approvedProjects.map(p => p.title).join(', ')}".` });
+    }
     const deadline = await Deadline.create({
       title, description, dueDate,
       targetRoles: [],
@@ -346,6 +356,9 @@ export const commentTimelineUpdate = async (req, res) => {
 
     const proposal = await ProjectProposal.findOne({ _id: proposalId, assignedFaculty: req.user._id });
     if (!proposal) return res.status(404).json({ message: 'Project not found or not assigned to you.' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
 
     const item = proposal.timeline.id(timelineId);
     if (!item) return res.status(404).json({ message: 'Timeline entry not found.' });
@@ -374,6 +387,9 @@ export const resolveExtensionRequest = async (req, res) => {
 
     const request = await ExtensionRequest.findById(requestId).populate('projectId');
     if (!request) return res.status(404).json({ message: 'Extension request not found.' });
+    if (request.projectId?.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
 
     // Validate supervisor authority (allow HOD/Admin as well)
     const isSupervisor = request.projectId.assignedFaculty.toString() === req.user._id.toString();

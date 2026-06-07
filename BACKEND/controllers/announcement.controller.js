@@ -3,6 +3,7 @@ import { Hod } from '../models/Hod.model.js';
 import { Faculty } from '../models/Faculty.model.js';
 import { Student } from '../models/Student.model.js';
 import { Notification } from '../models/Notification.model.js';
+import { ProjectProposal } from '../models/Proposal.model.js';
 
 // GET /api/announcements — all authenticated users
 export const getAnnouncements = async (req, res) => {
@@ -19,11 +20,19 @@ export const getAnnouncements = async (req, res) => {
       ]);
       const deptCreatorIds = [...hods, ...faculty];
 
+      const proposal = await ProjectProposal.findOne({ studentId: req.user._id });
+
       filter = {
         targetAudience: { $in: ['all', 'student'] },
         $or: [
           { createdByRole: 'admin' },
-          { createdBy: { $in: deptCreatorIds } }
+          {
+            createdBy: { $in: deptCreatorIds },
+            $or: [
+              { createdModel: { $ne: 'Faculty' } },
+              proposal && proposal.assignedFaculty ? { createdBy: proposal.assignedFaculty } : { _id: null }
+            ]
+          }
         ]
       };
     }

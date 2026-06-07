@@ -31,6 +31,14 @@ export const getStudentDashboard = async (req, res) => {
     // Merge and deduplicate deadlines by _id
     const seen = new Set();
     const deadlines = [...globalDeadlines, ...projectDeadlines]
+      .filter(d => {
+        // Enforce faculty-created deadline visibility restriction
+        if (d.createdModel === 'Faculty') {
+          if (!proposal || !proposal.assignedFaculty) return false;
+          return d.createdBy.toString() === proposal.assignedFaculty._id.toString();
+        }
+        return true;
+      })
       .filter(d => { const key = d._id.toString(); if (seen.has(key)) return false; seen.add(key); return true; })
       .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
       .slice(0, 10);
@@ -48,13 +56,23 @@ export const getStudentDashboard = async (req, res) => {
       Faculty.find({ department: studentBranch }).distinct('_id')
     ]);
     const deptCreatorIds = [...hods, ...faculty];
-    const announcements = await Announcement.find({
+    const announcementsList = await Announcement.find({
       targetAudience: { $in: ['all', 'student'] },
       $or: [
         { createdByRole: 'admin' },
         { createdBy: { $in: deptCreatorIds } }
       ]
-    }).sort({ pinned: -1, createdAt: -1 }).limit(10);
+    }).sort({ pinned: -1, createdAt: -1 });
+
+    const announcements = announcementsList
+      .filter(a => {
+        if (a.createdModel === 'Faculty') {
+          if (!proposal || !proposal.assignedFaculty) return false;
+          return a.createdBy.toString() === proposal.assignedFaculty._id.toString();
+        }
+        return true;
+      })
+      .slice(0, 10);
 
     console.log(`\x1b[36m[STUDENT]\x1b[0m Dashboard loaded for: ${req.user.email}`);
     res.status(200).json({ profile: req.user, proposal, submissions, deadlines, notifications, unreadCount, announcements });
@@ -145,6 +163,9 @@ export const updateProposal = async (req, res) => {
     const { title, description, domain, teamSize, teamMembers, referenceLinks, projectType } = req.body;
     const proposal = await ProjectProposal.findOne({ studentId: req.user._id });
     if (!proposal) return res.status(404).json({ message: 'No proposal found' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
     if (!['Rejected (HOD)', 'Rejected (Faculty)'].includes(proposal.status)) {
       return res.status(400).json({ message: 'You can only update a rejected proposal' });
     }
@@ -228,6 +249,9 @@ export const uploadFile = async (req, res) => {
     if (!req.files || req.files.length === 0) return res.status(400).json({ message: 'No files uploaded' });
     const proposal = await ProjectProposal.findOne({ studentId: req.user._id });
     if (!proposal) return res.status(400).json({ message: 'Submit a proposal first before uploading.' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
     if (['Rejected (HOD)', 'Rejected (Faculty)'].includes(proposal.status)) {
       return res.status(400).json({ message: 'Cannot upload files for a rejected proposal.' });
     }
@@ -339,6 +363,9 @@ export const addProjectTarget = async (req, res) => {
     const { title, description } = req.body;
     const proposal = await ProjectProposal.findOne({ studentId: req.user._id });
     if (!proposal) return res.status(404).json({ message: 'No proposal found.' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
     
     proposal.targets.push({ title, description });
     await proposal.save();
@@ -354,6 +381,9 @@ export const updateProjectTarget = async (req, res) => {
     const { status } = req.body;
     const proposal = await ProjectProposal.findOne({ studentId: req.user._id });
     if (!proposal) return res.status(404).json({ message: 'No proposal found.' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
     
     const target = proposal.targets.id(targetId);
     if (!target) return res.status(404).json({ message: 'Target not found.' });
@@ -372,6 +402,9 @@ export const submitFinalProject = async (req, res) => {
     const proposal = await ProjectProposal.findOne({ studentId: req.user._id });
     
     if (!proposal) return res.status(404).json({ message: 'No proposal found.' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
     if (proposal.status !== 'Faculty Accepted') {
       return res.status(400).json({ message: 'Project must be active/accepted before final submission.' });
     }
@@ -455,6 +488,9 @@ export const addTimelineUpdate = async (req, res) => {
     const { status, remarks } = req.body;
     const proposal = await ProjectProposal.findOne({ studentId: req.user._id });
     if (!proposal) return res.status(404).json({ message: 'No proposal found.' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
 
     // Enforce timeline push
     proposal.timeline.push({
@@ -500,6 +536,9 @@ export const requestDeadlineExtension = async (req, res) => {
     const { deadlineId, requestedDate, reason } = req.body;
     const proposal = await ProjectProposal.findOne({ studentId: req.user._id });
     if (!proposal) return res.status(404).json({ message: 'No proposal found.' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
 
     if (!reason || reason.trim().length < 20) {
       return res.status(400).json({ message: 'Reason must be at least 20 characters.' });
@@ -549,6 +588,9 @@ export const markDeadlineSubmitted = async (req, res) => {
     const { deadlineId } = req.params;
     const proposal = await ProjectProposal.findOne({ studentId: req.user._id });
     if (!proposal) return res.status(404).json({ message: 'No proposal found.' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
 
     const deadline = await Deadline.findById(deadlineId);
     if (!deadline) return res.status(404).json({ message: 'Deadline not found.' });

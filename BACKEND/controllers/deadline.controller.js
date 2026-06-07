@@ -73,6 +73,19 @@ export const getDeadlinesForUser = async (req, res) => {
       isActive: true,
       $or: [{ targetRoles: 'all' }, { targetRoles: role }]
     }).sort({ dueDate: 1 });
+
+    if (role === 'student') {
+      const proposal = await ProjectProposal.findOne({ studentId: req.user._id });
+      const filteredDeadlines = deadlines.filter(d => {
+        if (d.createdModel === 'Faculty') {
+          if (!proposal || !proposal.assignedFaculty) return false;
+          return d.createdBy.toString() === proposal.assignedFaculty._id.toString();
+        }
+        return true;
+      });
+      return res.status(200).json(filteredDeadlines);
+    }
+
     res.status(200).json(deadlines);
   } catch (error) {
     res.status(500).json({ message: error.message });

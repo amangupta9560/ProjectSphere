@@ -93,6 +93,9 @@ export const updatePrivateNotes = async (req, res) => {
     
     const proposal = await ProjectProposal.findById(projectId);
     if (!proposal) return res.status(404).json({ message: 'Project not found' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
 
     // Only HOD or assigned Faculty can update private notes
     const isFaculty = proposal.assignedFaculty?.toString() === req.user._id.toString();

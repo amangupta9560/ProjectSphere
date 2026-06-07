@@ -4,10 +4,12 @@ import { Student } from '../models/Student.model.js';
 import { Hod } from '../models/Hod.model.js';
 import { Notification } from '../models/Notification.model.js';
 import { Deadline } from '../models/Deadline.model.js';
+import { FileSubmission } from '../models/File.model.js';
 import { sendEmail } from '../config/nodemailer.js';
 import { emailTemplates } from '../utils/emailTemplates.js';
 import bcrypt from 'bcrypt';
 import ExcelJS from 'exceljs';
+
 
 export const getHodDashboard = async (req, res) => {
   try {
@@ -98,7 +100,15 @@ export const getAllProjects = async (req, res) => {
       .populate('assignedFaculty', 'name email department designation')
       .sort({ updatedAt: -1 });
 
-    res.status(200).json(projects);
+    const projectsWithFiles = await Promise.all(projects.map(async (p) => {
+      const files = await FileSubmission.find({ projectId: p._id }).sort({ createdAt: -1 });
+      return {
+        ...p.toObject(),
+        uploadedFiles: files
+      };
+    }));
+
+    res.status(200).json(projectsWithFiles);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -268,6 +278,9 @@ export const assignFacultyToProposal = async (req, res) => {
     const { facultyId } = req.body;
     const proposal = await ProjectProposal.findById(req.params.id).populate('studentId', 'name email');
     if (!proposal) return res.status(404).json({ message: 'Proposal not found' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
 
     if (proposal.status !== 'HOD Approved' && proposal.status !== 'Rejected (Faculty)' && proposal.status !== 'Pending Faculty Assignment') {
       return res.status(400).json({ message: 'Proposal must be approved by HOD before assigning faculty.' });
@@ -430,6 +443,9 @@ export const updateProjectSubmission = async (req, res) => {
       .populate('studentId', 'name email')
       .populate('assignedFaculty', 'name email');
     if (!proposal) return res.status(404).json({ message: 'Project not found' });
+    if (proposal.finalSubmission?.status === 'Accepted') {
+      return res.status(400).json({ message: 'Project is already approved and completed. No further updates are allowed.' });
+    }
     
     // Safety check: ensure it has finalSubmission initialized
     if (!proposal.finalSubmission) {
