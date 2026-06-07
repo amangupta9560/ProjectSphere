@@ -66,6 +66,7 @@ import adminRoutes            from './routes/admin.routes.js';
 import deadlineRoutes         from './routes/deadline.routes.js';
 import notificationRoutes     from './routes/notification.routes.js';
 import announcementRoutes     from './routes/announcement.routes.js';
+import projectRoutes          from './routes/project.routes.js';
 
 app.use('/api/auth',          authRoutes);
 app.use('/api/student',       studentRoutes);
@@ -75,6 +76,7 @@ app.use('/api/admin',         adminRoutes);
 app.use('/api/deadlines',     deadlineRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/projects',      projectRoutes);
 
 // ── Health check ──────────────────────────────────────────────
 app.get('/', (req, res) => res.json({ status: 'ProjectSphere API running ✅', env: process.env.NODE_ENV }));

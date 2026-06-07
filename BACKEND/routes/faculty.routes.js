@@ -2,7 +2,7 @@ import express from 'express';
 import { protect, authorizeRoles } from '../middleware/auth.middleware.js';
 import {
   getFacultyDashboard, acceptProposal, rejectProposal, addFeedback,
-  updateProgress, assignDeadline, rejectFinalSubmission,
+  updateProgress, assignDeadline, rejectFinalSubmission, approveFinalSubmission,
   commentTimelineUpdate, resolveExtensionRequest
 } from '../controllers/faculty.controller.js';
 
@@ -16,6 +16,7 @@ router.put('/proposals/:id/reject', rejectProposal);
 router.post('/proposals/:id/feedback', addFeedback);
 router.put('/proposals/:id/progress', updateProgress);
 router.put('/proposals/:id/reject-submission', rejectFinalSubmission);
+router.put('/proposals/:id/approve-submission', approveFinalSubmission);
 router.post('/deadlines', assignDeadline);
 
 // Timeline Commenting & Extension Request Resolution

@@ -180,9 +180,12 @@ export const rejectProposal = async (req, res) => {
 // ── rejectFinalSubmission ─────────────────────────────────────────────────────
 export const rejectFinalSubmission = async (req, res) => {
   try {
-    const { reason } = req.body;
+    const { reason, requiredCorrections } = req.body;
     if (!reason || reason.trim().length < 20) {
       return res.status(400).json({ message: 'Rejection reason must be at least 20 characters.' });
+    }
+    if (!requiredCorrections || requiredCorrections.trim().length < 20) {
+      return res.status(400).json({ message: 'Required corrections must be at least 20 characters.' });
     }
     const proposal = await ProjectProposal.findOne({ _id: req.params.id, assignedFaculty: req.user._id })
       .populate('studentId', 'name email');
@@ -190,6 +193,20 @@ export const rejectFinalSubmission = async (req, res) => {
     if (proposal.status !== 'Submitted') {
       return res.status(400).json({ message: 'Project is not in Submitted state.' });
     }
+
+    // Record history
+    proposal.submissionHistory.push({
+      liveLink: proposal.finalSubmission.liveLink,
+      githubLink: proposal.finalSubmission.githubLink,
+      linkedinLink: proposal.finalSubmission.linkedinLink,
+      submittedAt: proposal.finalSubmission.submittedAt,
+      version: proposal.submissionHistory.length + 1,
+      reviewerName: req.user.name,
+      reviewerRole: 'Faculty',
+      rejectionReason: reason.trim(),
+      requiredCorrections: requiredCorrections.trim(),
+      reviewedAt: new Date()
+    });
 
     // Mark submission as rejected, reset status so student can re-upload
     proposal.finalSubmission.status = 'Rejected';
@@ -204,14 +221,49 @@ export const rejectFinalSubmission = async (req, res) => {
     });
 
     // Send rejection email
-    const subject = `🔄 Final Submission Rejected — "${proposal.title}"`;
-    const html = emailTemplates.proposalRejected(proposal.studentId.name, proposal.title, reason);
+    const subject = `❌ Final Submission Rejected — "${proposal.title}"`;
+    const html = emailTemplates.proposalRejected(proposal.studentId.name, proposal.title, `${reason.trim()}<br/><strong>Required Corrections:</strong> ${requiredCorrections.trim()}`);
     sendEmail(proposal.studentId.email, subject, html);
 
     console.log(`\x1b[31m[INFO]\x1b[0m Final submission rejected for: "${proposal.title}"`);
     res.status(200).json({ message: 'Submission rejected. Student can now re-submit.', proposal });
   } catch (error) {
     console.error('\x1b[31m[ERROR]\x1b[0m rejectFinalSubmission:', error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ── approveFinalSubmission ────────────────────────────────────────────────────
+export const approveFinalSubmission = async (req, res) => {
+  try {
+    const proposal = await ProjectProposal.findOne({ _id: req.params.id, assignedFaculty: req.user._id })
+      .populate('studentId', 'name email');
+    if (!proposal) return res.status(404).json({ message: 'Project not found or not assigned to you.' });
+    if (proposal.status !== 'Submitted') {
+      return res.status(400).json({ message: 'Project is not in Submitted state.' });
+    }
+
+    proposal.finalSubmission.status = 'Accepted';
+    proposal.status = 'Submitted'; // Keeps Submitted (since it's finalized!)
+    await proposal.save();
+
+    // Create notifications
+    await Notification.create({
+      userId: proposal.studentId._id,
+      userModel: 'Student',
+      message: `🎉 Congratulations! Your final project submission for "${proposal.title}" has been accepted and approved by your Faculty supervisor.`,
+      type: 'approval'
+    });
+
+    // Send completion email
+    const subject = `🎉 Project Completion Approved — "${proposal.title}"`;
+    const html = emailTemplates.projectCompletion(proposal.studentId.name, proposal.title, req.user.name);
+    sendEmail(proposal.studentId.email, subject, html);
+
+    console.log(`\x1b[32m[SUCCESS]\x1b[0m Final submission approved by Faculty for ${proposal.title}`);
+    res.status(200).json({ message: 'Final submission approved successfully.', proposal });
+  } catch (error) {
+    console.error('\x1b[31m[ERROR]\x1b[0m approveFinalSubmission:', error.message);
     res.status(500).json({ message: error.message });
   }
 };

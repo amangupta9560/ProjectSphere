@@ -120,17 +120,18 @@ export const getAllStudents = async (req, res) => {
 
 export const getFacultyWorkload = async (req, res) => {
   try {
-    const faculty = await Faculty.find({ isApproved: true, department: req.user.department }).select('name email department designation');
+    const faculty = await Faculty.find({ isApproved: true, department: req.user.department }).select('name email department designation maxStudents');
     const workload = await Promise.all(faculty.map(async (f) => {
       const activeProjects = await ProjectProposal.find({ assignedFaculty: f._id, status: { $in: ['Faculty Assigned', 'Faculty Accepted', 'Submitted'] } });
       const projectCount = activeProjects.length;
       const studentCount = activeProjects.reduce((sum, p) => sum + 1 + (p.teamMembers?.length || 0), 0);
+      const capacity = f.maxStudents || 60;
       return {
         ...f.toObject(),
         projectCount,
         studentCount,
-        capacity: 60,
-        availableSlots: 60 - studentCount
+        capacity,
+        availableSlots: capacity - studentCount
       };
     }));
     res.status(200).json(workload);
@@ -167,16 +168,17 @@ export const rejectFaculty = async (req, res) => {
 
 export const getApprovedFacultyList = async (req, res) => {
   try {
-    const faculty = await Faculty.find({ isApproved: true, department: req.user.department }).select('name email department designation');
+    const faculty = await Faculty.find({ isApproved: true, department: req.user.department }).select('name email department designation maxStudents');
     const workload = await Promise.all(faculty.map(async (f) => {
       const activeProjects = await ProjectProposal.find({ assignedFaculty: f._id, status: { $in: ['Faculty Assigned', 'Faculty Accepted', 'Submitted'] } });
       const studentCount = activeProjects.reduce((sum, p) => sum + 1 + (p.teamMembers?.length || 0), 0);
+      const capacity = f.maxStudents || 60;
       return {
         ...f.toObject(),
         projectCount: activeProjects.length,
         studentCount,
-        capacity: 60,
-        availableSlots: 60 - studentCount
+        capacity,
+        availableSlots: capacity - studentCount
       };
     }));
     res.status(200).json(workload);
@@ -422,36 +424,83 @@ export const exportProjectsExcel = async (req, res) => {
 
 export const updateProjectSubmission = async (req, res) => {
   try {
-    const { status, rejectionReason } = req.body;
+    const { status, rejectionReason, requiredCorrections } = req.body;
     const proposal = await ProjectProposal.findById(req.params.id)
       .populate('studentId', 'name email')
-      .populate('assignedFaculty', 'name');
+      .populate('assignedFaculty', 'name email');
     if (!proposal) return res.status(404).json({ message: 'Project not found' });
     
     // Safety check: ensure it has finalSubmission initialized
     if (!proposal.finalSubmission) {
-        proposal.finalSubmission = { status: 'Not Submitted' };
+      proposal.finalSubmission = { status: 'Not Submitted' };
     }
 
-    proposal.finalSubmission.status = status;
-    proposal.finalSubmission.rejectionReason = status === 'Rejected' ? rejectionReason : '';
-    
-    if (status === 'Accepted') {
-      proposal.status = 'Submitted'; // Mark as successfully submitted
-    }
-    
-    await proposal.save();
+    if (status === 'Under Faculty Review') {
+      proposal.finalSubmission.status = 'Under Faculty Review';
+      await proposal.save();
 
-    await Notification.create({ userId: proposal.studentId._id, userModel: 'Student', message: `Your final submission status is now: ${status}.`, type: 'general' });
-    
-    if (status === 'Accepted') {
-      // Send Completion Email to Student
-      const facultyName = proposal.assignedFaculty ? proposal.assignedFaculty.name : 'your Faculty Supervisor';
-      sendEmail(proposal.studentId.email, `🎉 Project Completion Approval — "${proposal.title}"`, emailTemplates.projectCompletion(proposal.studentId.name, proposal.title, facultyName));
-    }
+      if (proposal.assignedFaculty) {
+        await Notification.create({
+          userId: proposal.assignedFaculty._id,
+          userModel: 'Faculty',
+          message: `Project final submission for "${proposal.title}" has been approved by HOD and is now awaiting your Faculty Review.`,
+          type: 'submission'
+        });
+      }
 
-    console.log(`\x1b[32m[SUCCESS]\x1b[0m Final submission for ${proposal.title} updated to ${status}`);
-    res.status(200).json({ message: `Submission status updated to ${status}`, proposal });
+      await Notification.create({
+        userId: proposal.studentId._id,
+        userModel: 'Student',
+        message: `Your project final submission has passed HOD review and is now under Faculty Review.`,
+        type: 'general'
+      });
+
+      console.log(`\x1b[32m[SUCCESS]\x1b[0m HOD approved final submission for ${proposal.title}, forwarded to Faculty.`);
+      return res.status(200).json({ message: 'Submission approved by HOD and forwarded to Faculty review.', proposal });
+    } else if (status === 'Rejected') {
+      if (!rejectionReason || rejectionReason.trim().length < 20) {
+        return res.status(400).json({ message: 'Rejection reason must be at least 20 characters.' });
+      }
+      if (!requiredCorrections || requiredCorrections.trim().length < 20) {
+        return res.status(400).json({ message: 'Required corrections must be at least 20 characters.' });
+      }
+
+      // Record history
+      proposal.submissionHistory.push({
+        liveLink: proposal.finalSubmission.liveLink,
+        githubLink: proposal.finalSubmission.githubLink,
+        linkedinLink: proposal.finalSubmission.linkedinLink,
+        submittedAt: proposal.finalSubmission.submittedAt,
+        version: proposal.submissionHistory.length + 1,
+        reviewerName: req.user.name,
+        reviewerRole: 'HOD',
+        rejectionReason: rejectionReason.trim(),
+        requiredCorrections: requiredCorrections.trim(),
+        reviewedAt: new Date()
+      });
+
+      proposal.finalSubmission.status = 'Rejected';
+      proposal.finalSubmission.rejectionReason = rejectionReason.trim();
+      proposal.status = 'Faculty Accepted'; // Reopens upload section
+      await proposal.save();
+
+      await Notification.create({
+        userId: proposal.studentId._id,
+        userModel: 'Student',
+        message: `Your final submission was rejected by HOD. Reason: ${rejectionReason.trim().substring(0, 60)}...`,
+        type: 'rejection'
+      });
+
+      // Send rejection email to student
+      const subject = `❌ Project Final Submission Rejected by HOD — "${proposal.title}"`;
+      const html = emailTemplates.proposalRejected(proposal.studentId.name, proposal.title, `${rejectionReason.trim()}<br/><strong>Required Corrections:</strong> ${requiredCorrections.trim()}`);
+      sendEmail(proposal.studentId.email, subject, html);
+
+      console.log(`\x1b[31m[INFO]\x1b[0m Final submission rejected by HOD for ${proposal.title}`);
+      return res.status(200).json({ message: 'Submission rejected by HOD. Student notified to re-submit.', proposal });
+    } else {
+      return res.status(400).json({ message: 'Invalid final submission status change.' });
+    }
   } catch (error) {
     console.error('\x1b[31m[ERROR]\x1b[0m updateProjectSubmission:', error.message);
     res.status(500).json({ message: error.message });

@@ -30,11 +30,37 @@ const projectProposalSchema = new mongoose.Schema(
       submittedAt: Date,
       status: {
         type: String,
-        enum: ['Not Submitted', 'Under Review', 'Accepted', 'Rejected'],
+        enum: ['Not Submitted', 'Under HOD Review', 'Under Faculty Review', 'Accepted', 'Rejected'],
         default: 'Not Submitted'
       },
       rejectionReason: String,
     },
+    projectType: {
+      type: String,
+      enum: ['Application', 'Research Paper'],
+      default: 'Application'
+    },
+    deadlineSubmissions: [
+      {
+        deadlineId: { type: mongoose.Schema.Types.ObjectId, ref: 'Deadline', required: true },
+        status: { type: String, enum: ['Submitted', 'Late Submission', 'Pending Submission', 'Deadline Missed'], default: 'Pending Submission' },
+        submittedAt: Date
+      }
+    ],
+    submissionHistory: [
+      {
+        liveLink: String,
+        githubLink: String,
+        linkedinLink: String,
+        submittedAt: Date,
+        version: Number,
+        reviewerName: String,
+        reviewerRole: String,
+        rejectionReason: String,
+        requiredCorrections: String,
+        reviewedAt: Date
+      }
+    ],
     supervisorRequested: { type: Boolean, default: false },
     status: {
       type: String,
@@ -92,7 +118,8 @@ const projectProposalSchema = new mongoose.Schema(
         deadlineId: { type: mongoose.Schema.Types.ObjectId, ref: 'Deadline' },
         extendedDate: { type: Date, required: true }
       }
-    ]
+    ],
+    privateNotes: { type: String, default: '' }
   },
   { timestamps: true }
 );

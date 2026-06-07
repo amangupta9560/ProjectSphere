@@ -14,7 +14,7 @@ const fileSubmissionSchema = new mongoose.Schema(
     },
     fileType: {
       type: String,
-      enum: ['document', 'presentation', 'code', 'paper'],
+      enum: ['document', 'presentation', 'paper'],
       required: true,
     },
     fileName: {

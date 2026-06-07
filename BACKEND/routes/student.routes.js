@@ -5,7 +5,8 @@ import {
   getStudentDashboard, submitProposal, updateProposal, uploadFile, getFiles,
   getAvailableFaculty, requestSupervisor, getProjectTargets, addProjectTarget,
   updateProjectTarget, submitFinalProject, updateStudentProfile,
-  addTimelineUpdate, requestDeadlineExtension, getStudentExtensions
+  addTimelineUpdate, requestDeadlineExtension, getStudentExtensions,
+  markDeadlineSubmitted
 } from '../controllers/student.controller.js';
 
 const router = express.Router();
@@ -31,5 +32,6 @@ router.post('/targets', addProjectTarget);
 router.put('/targets/:targetId', updateProjectTarget);
 
 router.post('/submit-final', submitFinalProject);
+router.post('/deadlines/:deadlineId/submit', markDeadlineSubmitted);
 
 export default router;

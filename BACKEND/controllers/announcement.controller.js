@@ -1,4 +1,8 @@
 import { Announcement } from '../models/Announcement.model.js';
+import { Hod } from '../models/Hod.model.js';
+import { Faculty } from '../models/Faculty.model.js';
+import { Student } from '../models/Student.model.js';
+import { Notification } from '../models/Notification.model.js';
 
 // GET /api/announcements — all authenticated users
 export const getAnnouncements = async (req, res) => {
@@ -6,15 +10,41 @@ export const getAnnouncements = async (req, res) => {
     const { audience } = req.query;
     let filter = {};
 
-    // Students only see 'all' and 'student' targeted announcements
+    // Students only see 'all' and 'student' targeted announcements from their branch/department HOD/Faculty, or Admin
     if (req.user.role === 'student') {
-      filter.targetAudience = { $in: ['all', 'student'] };
+      const studentBranch = req.user.branch;
+      const [hods, faculty] = await Promise.all([
+        Hod.find({ department: studentBranch }).distinct('_id'),
+        Faculty.find({ department: studentBranch }).distinct('_id')
+      ]);
+      const deptCreatorIds = [...hods, ...faculty];
+
+      filter = {
+        targetAudience: { $in: ['all', 'student'] },
+        $or: [
+          { createdByRole: 'admin' },
+          { createdBy: { $in: deptCreatorIds } }
+        ]
+      };
     }
-    // Faculty only see 'all' and 'faculty'
+    // Faculty only see 'all' and 'faculty' from their department HOD/Faculty, or Admin
     else if (req.user.role === 'faculty') {
-      filter.targetAudience = { $in: ['all', 'faculty'] };
+      const facultyDept = req.user.department;
+      const [hods, faculty] = await Promise.all([
+        Hod.find({ department: facultyDept }).distinct('_id'),
+        Faculty.find({ department: facultyDept }).distinct('_id')
+      ]);
+      const deptCreatorIds = [...hods, ...faculty];
+
+      filter = {
+        targetAudience: { $in: ['all', 'faculty'] },
+        $or: [
+          { createdByRole: 'admin' },
+          { createdBy: { $in: deptCreatorIds } }
+        ]
+      };
     }
-    // Admin and HOD see everything
+
     if (audience && audience !== 'all') filter.targetAudience = audience;
 
     const announcements = await Announcement.find(filter)
@@ -45,6 +75,26 @@ export const createAnnouncement = async (req, res) => {
       createdByName: req.user.name,
       createdByRole: req.user.role,
     });
+
+    // Send notifications to students in the department
+    if (['all', 'student'].includes(targetAudience)) {
+      let studentFilter = {};
+      if (req.user.role === 'hod' || req.user.role === 'faculty') {
+        studentFilter.branch = req.user.department;
+      }
+      
+      const students = await Student.find(studentFilter);
+      const notifications = students.map(student => ({
+        userId: student._id,
+        userModel: 'Student',
+        message: `New Announcement from ${req.user.name} (${pRole}): "${title.trim()}"`,
+        type: 'general'
+      }));
+
+      if (notifications.length > 0) {
+        await Notification.insertMany(notifications);
+      }
+    }
 
     console.log(`\x1b[32m[SUCCESS]\x1b[0m Announcement created by ${req.user.email}: "${title}"`);
     res.status(201).json({ message: 'Announcement created', announcement });

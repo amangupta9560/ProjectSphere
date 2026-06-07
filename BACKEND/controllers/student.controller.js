@@ -5,6 +5,8 @@ import { FileSubmission } from '../models/File.model.js';
 import { Deadline } from '../models/Deadline.model.js';
 import { Notification } from '../models/Notification.model.js';
 import { ExtensionRequest } from '../models/ExtensionRequest.model.js';
+import { Hod } from '../models/Hod.model.js';
+import { Announcement } from '../models/Announcement.model.js';
 import cloudinary from '../config/cloudinary.js';
 
 export const getStudentDashboard = async (req, res) => {
@@ -38,8 +40,24 @@ export const getStudentDashboard = async (req, res) => {
       submissions = await FileSubmission.find({ projectId: proposal._id }).sort({ createdAt: -1 });
     }
     const { notifications, unreadCount } = await getNotificationsForUser(req.user._id);
+
+    // Fetch announcements from creator belonging to same department or creator is admin
+    const studentBranch = req.user.branch;
+    const [hods, faculty] = await Promise.all([
+      Hod.find({ department: studentBranch }).distinct('_id'),
+      Faculty.find({ department: studentBranch }).distinct('_id')
+    ]);
+    const deptCreatorIds = [...hods, ...faculty];
+    const announcements = await Announcement.find({
+      targetAudience: { $in: ['all', 'student'] },
+      $or: [
+        { createdByRole: 'admin' },
+        { createdBy: { $in: deptCreatorIds } }
+      ]
+    }).sort({ pinned: -1, createdAt: -1 }).limit(10);
+
     console.log(`\x1b[36m[STUDENT]\x1b[0m Dashboard loaded for: ${req.user.email}`);
-    res.status(200).json({ profile: req.user, proposal, submissions, deadlines, notifications, unreadCount });
+    res.status(200).json({ profile: req.user, proposal, submissions, deadlines, notifications, unreadCount, announcements });
   } catch (error) {
     console.error('\x1b[31m[ERROR]\x1b[0m getStudentDashboard:', error.message);
     res.status(500).json({ message: error.message });
@@ -54,14 +72,65 @@ const getNotificationsForUser = async (userId) => {
 
 export const submitProposal = async (req, res) => {
   try {
-    const { title, description, domain, teamSize, teamMembers, referenceLinks } = req.body;
+    const { title, description, domain, teamSize, teamMembers, referenceLinks, projectType } = req.body;
     const existingProposal = await ProjectProposal.findOne({ studentId: req.user._id });
     if (existingProposal) return res.status(400).json({ message: 'Proposal already exists. You can only update it.' });
+
+    // Validate team size (max 4 members total including the leader)
+    const membersList = teamMembers || [];
+    const totalTeamSize = 1 + membersList.length;
+    if (totalTeamSize > 4) {
+      return res.status(400).json({ message: 'A team can have a maximum of 4 members including the leader.' });
+    }
+    if (totalTeamSize < 1) {
+      return res.status(400).json({ message: 'A team must have at least 1 member.' });
+    }
+
+    // Check if leader is already a member of another active proposal
+    const leaderActiveMember = await ProjectProposal.findOne({
+      'teamMembers.email': req.user.email,
+      status: { $nin: ['Rejected (HOD)', 'Rejected (Faculty)'] }
+    });
+    if (leaderActiveMember) {
+      return res.status(400).json({ message: `You are already a team member of another active project: "${leaderActiveMember.title}".` });
+    }
+
+    // Check team members uniqueness
+    const emails = membersList.map(m => m.email.toLowerCase().trim());
+    if (emails.includes(req.user.email.toLowerCase().trim())) {
+      return res.status(400).json({ message: 'You cannot add yourself (the leader) as a team member.' });
+    }
+    const uniqueEmails = [...new Set(emails)];
+    if (uniqueEmails.length !== emails.length) {
+      return res.status(400).json({ message: 'Duplicate team members are not allowed.' });
+    }
+
+    for (const email of emails) {
+      const studentUser = await Student.findOne({ email });
+      if (studentUser) {
+        const activeLeader = await ProjectProposal.findOne({
+          studentId: studentUser._id,
+          status: { $nin: ['Rejected (HOD)', 'Rejected (Faculty)'] }
+        });
+        if (activeLeader) {
+          return res.status(400).json({ message: `Student with email ${email} is already the leader of another active project: "${activeLeader.title}".` });
+        }
+      }
+      const activeMember = await ProjectProposal.findOne({
+        'teamMembers.email': email,
+        status: { $nin: ['Rejected (HOD)', 'Rejected (Faculty)'] }
+      });
+      if (activeMember) {
+        return res.status(400).json({ message: `Student with email ${email} is already a team member of another active project: "${activeMember.title}".` });
+      }
+    }
+
     const proposal = await ProjectProposal.create({
       studentId: req.user._id, title, description, domain: domain || '',
       department: req.user.branch,
-      teamSize: teamSize || 1, teamMembers: teamMembers || [],
-      referenceLinks: referenceLinks || []
+      teamSize: totalTeamSize, teamMembers: membersList,
+      referenceLinks: referenceLinks || [],
+      projectType: projectType || 'Application'
     });
     console.log(`\x1b[32m[SUCCESS]\x1b[0m Proposal submitted: "${title}" by ${req.user.email}`);
     res.status(201).json({ message: 'Project proposal submitted successfully', proposal });
@@ -73,19 +142,73 @@ export const submitProposal = async (req, res) => {
 
 export const updateProposal = async (req, res) => {
   try {
-    const { title, description, domain, teamSize, teamMembers, referenceLinks } = req.body;
+    const { title, description, domain, teamSize, teamMembers, referenceLinks, projectType } = req.body;
     const proposal = await ProjectProposal.findOne({ studentId: req.user._id });
     if (!proposal) return res.status(404).json({ message: 'No proposal found' });
     if (!['Rejected (HOD)', 'Rejected (Faculty)'].includes(proposal.status)) {
       return res.status(400).json({ message: 'You can only update a rejected proposal' });
     }
+
+    // Validate team size (max 4 members total including the leader)
+    const membersList = teamMembers || proposal.teamMembers;
+    const totalTeamSize = 1 + membersList.length;
+    if (totalTeamSize > 4) {
+      return res.status(400).json({ message: 'A team can have a maximum of 4 members including the leader.' });
+    }
+    if (totalTeamSize < 1) {
+      return res.status(400).json({ message: 'A team must have at least 1 member.' });
+    }
+
+    // Check if leader is already a member of another active proposal (excluding current proposal)
+    const leaderActiveMember = await ProjectProposal.findOne({
+      _id: { $ne: proposal._id },
+      'teamMembers.email': req.user.email,
+      status: { $nin: ['Rejected (HOD)', 'Rejected (Faculty)'] }
+    });
+    if (leaderActiveMember) {
+      return res.status(400).json({ message: `You are already a team member of another active project: "${leaderActiveMember.title}".` });
+    }
+
+    // Check team members uniqueness
+    const emails = membersList.map(m => m.email.toLowerCase().trim());
+    if (emails.includes(req.user.email.toLowerCase().trim())) {
+      return res.status(400).json({ message: 'You cannot add yourself (the leader) as a team member.' });
+    }
+    const uniqueEmails = [...new Set(emails)];
+    if (uniqueEmails.length !== emails.length) {
+      return res.status(400).json({ message: 'Duplicate team members are not allowed.' });
+    }
+
+    for (const email of emails) {
+      const studentUser = await Student.findOne({ email });
+      if (studentUser) {
+        const activeLeader = await ProjectProposal.findOne({
+          _id: { $ne: proposal._id },
+          studentId: studentUser._id,
+          status: { $nin: ['Rejected (HOD)', 'Rejected (Faculty)'] }
+        });
+        if (activeLeader) {
+          return res.status(400).json({ message: `Student with email ${email} is already the leader of another active project: "${activeLeader.title}".` });
+        }
+      }
+      const activeMember = await ProjectProposal.findOne({
+        _id: { $ne: proposal._id },
+        'teamMembers.email': email,
+        status: { $nin: ['Rejected (HOD)', 'Rejected (Faculty)'] }
+      });
+      if (activeMember) {
+        return res.status(400).json({ message: `Student with email ${email} is already a team member of another active project: "${activeMember.title}".` });
+      }
+    }
+
     proposal.title = title || proposal.title;
     proposal.description = description || proposal.description;
     if (domain !== undefined) proposal.domain = domain;
     proposal.department = req.user.branch; // always enforce strict department
-    if (teamSize !== undefined) proposal.teamSize = teamSize;
+    proposal.teamSize = totalTeamSize;
     if (teamMembers) proposal.teamMembers = teamMembers;
     proposal.referenceLinks = referenceLinks || proposal.referenceLinks;
+    if (projectType !== undefined) proposal.projectType = projectType;
     proposal.status = 'Pending HOD Review';
     await proposal.save();
     console.log(`\x1b[32m[SUCCESS]\x1b[0m Proposal resubmitted: "${proposal.title}"`);
@@ -99,11 +222,17 @@ export const updateProposal = async (req, res) => {
 export const uploadFile = async (req, res) => {
   try {
     const { fileType } = req.body;
+    if (fileType === 'code') {
+      return res.status(400).json({ message: 'ZIP file uploads are no longer supported.' });
+    }
     if (!req.files || req.files.length === 0) return res.status(400).json({ message: 'No files uploaded' });
     const proposal = await ProjectProposal.findOne({ studentId: req.user._id });
     if (!proposal) return res.status(400).json({ message: 'Submit a proposal first before uploading.' });
     if (['Rejected (HOD)', 'Rejected (Faculty)'].includes(proposal.status)) {
       return res.status(400).json({ message: 'Cannot upload files for a rejected proposal.' });
+    }
+    if (proposal.progress < 100) {
+      return res.status(400).json({ message: 'File submission portal is locked. Project progress must be 100% to upload files.' });
     }
     
     const submissions = [];
@@ -141,14 +270,22 @@ export const getAvailableFaculty = async (req, res) => {
       .select('name email department designation specialization maxStudents');
     
     const facultyWithCounts = await Promise.all(faculty.map(async (f) => {
-      const activeProjectsCount = await ProjectProposal.countDocuments({
+      const activeProjects = await ProjectProposal.find({
         assignedFaculty: f._id,
         status: { $in: ['Faculty Assigned', 'Faculty Accepted', 'Submitted'] }
       });
+      const projectCount = activeProjects.length;
+      const studentCount = activeProjects.reduce((sum, p) => sum + 1 + (p.teamMembers?.length || 0), 0);
+      const capacity = f.maxStudents || 60;
+      const availableSlots = capacity - studentCount;
       return {
         ...f.toObject(),
-        activeProjectsCount,
-        isAvailable: activeProjectsCount < (f.maxStudents || 5)
+        activeProjectsCount: projectCount, // keep for backward compatibility
+        projectCount,
+        studentCount,
+        capacity,
+        availableSlots,
+        isAvailable: studentCount < capacity
       };
     }));
 
@@ -238,21 +375,43 @@ export const submitFinalProject = async (req, res) => {
     if (proposal.status !== 'Faculty Accepted') {
       return res.status(400).json({ message: 'Project must be active/accepted before final submission.' });
     }
+    if (proposal.progress < 100) {
+      return res.status(400).json({ message: 'Project progress must be 100% before final submission.' });
+    }
+
+    if (!liveLink || !githubLink || !linkedinLink) {
+      return res.status(400).json({ message: 'All required links (Live Project Link, GitHub Repository Link, and LinkedIn Post Link) must be provided.' });
+    }
+
+    const files = await FileSubmission.find({ projectId: proposal._id });
+    const hasReport = files.some(f => f.fileType === 'document');
+    const hasPPT = files.some(f => f.fileType === 'presentation');
+
+    if (!hasReport) return res.status(400).json({ message: 'Project Report File is missing. Please upload it first.' });
+    if (!hasPPT) return res.status(400).json({ message: 'Project PPT File is missing. Please upload it first.' });
+
+    if (proposal.projectType === 'Research Paper') {
+      const hasPaper = files.some(f => f.fileType === 'paper');
+      if (!hasPaper) return res.status(400).json({ message: 'Research Paper PDF is missing. Please upload it first.' });
+    }
 
     proposal.finalSubmission = {
       liveLink,
       githubLink,
       linkedinLink,
-      submittedAt: new Date()
+      submittedAt: new Date(),
+      status: 'Under HOD Review'
     };
     proposal.status = 'Submitted';
     await proposal.save();
 
-    if (proposal.assignedFaculty) {
+    // Notify HOD
+    const hod = await Hod.findOne({ department: proposal.department });
+    if (hod) {
       await Notification.create({
-        userId: proposal.assignedFaculty,
-        userModel: 'Faculty',
-        message: `Final project submitted for "${proposal.title}".`,
+        userId: hod._id,
+        userModel: 'Hod',
+        message: `Final project submission uploaded for "${proposal.title}" by ${req.user.name}. Awaiting HOD review.`,
         type: 'submission'
       });
     }
@@ -309,7 +468,7 @@ export const addTimelineUpdate = async (req, res) => {
       'PROJECT STARTED': 20,
       'PROTOTYPE CREATED': 50,
       'REPORT PREPARED': 80,
-      'PROJECT COMPLETE': 95,
+      'PROJECT COMPLETE': 100,
       'PROJECT SUBMITTED': 100
     };
     if (progressMap[status]) {
@@ -381,6 +540,43 @@ export const getStudentExtensions = async (req, res) => {
       .sort({ createdAt: -1 });
     res.status(200).json(requests);
   } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const markDeadlineSubmitted = async (req, res) => {
+  try {
+    const { deadlineId } = req.params;
+    const proposal = await ProjectProposal.findOne({ studentId: req.user._id });
+    if (!proposal) return res.status(404).json({ message: 'No proposal found.' });
+
+    const deadline = await Deadline.findById(deadlineId);
+    if (!deadline) return res.status(404).json({ message: 'Deadline not found.' });
+
+    // Determine final due date (with extensions)
+    const extMatch = proposal.extendedDeadlines?.find(ed => ed.deadlineId.toString() === deadlineId);
+    const finalDueDate = extMatch ? new Date(extMatch.extendedDate) : new Date(deadline.dueDate);
+    const now = new Date();
+
+    const status = now <= finalDueDate ? 'Submitted' : 'Late Submission';
+
+    const existingIdx = proposal.deadlineSubmissions.findIndex(ds => ds.deadlineId.toString() === deadlineId);
+    if (existingIdx > -1) {
+      proposal.deadlineSubmissions[existingIdx].status = status;
+      proposal.deadlineSubmissions[existingIdx].submittedAt = now;
+    } else {
+      proposal.deadlineSubmissions.push({
+        deadlineId,
+        status,
+        submittedAt: now
+      });
+    }
+
+    await proposal.save();
+    console.log(`\x1b[32m[SUCCESS]\x1b[0m Student ${req.user.email} marked deadline ${deadlineId} as ${status}`);
+    res.status(200).json({ message: `Deadline marked as ${status.toLowerCase()} successfully.`, proposal });
+  } catch (error) {
+    console.error('\x1b[31m[ERROR]\x1b[0m markDeadlineSubmitted:', error.message);
     res.status(500).json({ message: error.message });
   }
 };
