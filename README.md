@@ -438,7 +438,9 @@ npm run dev</code></pre>
 
 <h2>🔑 Environment Variables</h2>
 <p>Create a <code>.env</code> file in the <code>BACKEND/</code> directory:</p>
-<pre><code>PORT=5000
+<pre>
+<code>
+PORT=5000
 NODE_ENV=development
 MONGO_URI=your_mongodb_atlas_connection_string
 JWT_SECRET=your_jwt_secret_token
@@ -484,7 +486,12 @@ ADMIN_PASSWORD=Admin@1234</code></pre>
     <tr><td><code>POST</code></td><td><code>/faculty/proposals/:id/feedback</code></td><td>Log project revision feedback</td><td>Faculty</td></tr>
     <tr><td><code>PUT</code></td><td><code>/faculty/proposals/:id/progress</code></td><td>Update project progress percentage</td><td>Faculty</td></tr>
     <!-- HOD -->
-    <tr><td rowspan="5"><b>HOD</b></td><td><code>GET</code></td><td><code>/hod/dashboard</code></td><td>Fetch HOD dashboard datasets</td><td>HOD</td></tr>
+    <tr><td rowspan="5">
+    <b>HOD</b>
+    </td>
+    <td>
+    <code>GET</code>
+    </td><td><code>/hod/dashboard</code></td><td>Fetch HOD dashboard datasets</td><td>HOD</td></tr>
     <tr><td><code>PUT</code></td><td><code>/hod/proposals/:id/approve</code></td><td>Approve draft student proposal</td><td>HOD</td></tr>
     <tr><td><code>PUT</code></td><td><code>/hod/proposals/:id/assign-faculty</code></td><td>Allocate supervisor to approved project</td><td>HOD</td></tr>
     <tr><td><code>PUT</code></td><td><code>/hod/faculty/:id/approve</code></td><td>Approve pending faculty signup</td><td>HOD</td></tr>
