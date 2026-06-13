@@ -432,7 +432,7 @@ npm install
 
 # Start Vite server
 npm run dev</code></pre>
-<p>The client will open automatically at <code>http://localhost:5173</code></p>
+<p>The client will open automatically at <code>http://localhost:5173 or replace it with your live ink</code></p>
 
 <br/>
 
